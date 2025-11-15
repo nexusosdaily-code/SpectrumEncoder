@@ -10,7 +10,43 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### November 15, 2025 - Camera-Based Wavelength Scanner
+### November 15, 2025 - Dual-Channel Encoding with Calibration System
+**Implemented complete dual-channel encoding/decoding for robust cross-device communication:**
+
+**Encoding System (Encoder Page):**
+- **Calibration Toggle**: UI checkbox (default enabled) to include/exclude calibration sequence
+- **Dual-Channel Structure**: Each letter = color flash (TS duration) + 3 brightness digit pulses (40ms each) + mini-guards (20ms)
+- **Wavelength Embedding**: 3-digit wavelength (380-740nm) encoded as grayscale brightness levels (0-9)
+  - Example: Letter "M" (560nm) → Green flash + brightness(5) + brightness(6) + brightness(0)
+- **Calibration Sequence**: Preamble (white 300ms + black 300ms) + 3 reference wavelengths (400nm, 520nm, 640nm)
+- **Timing Impact**: ~2x longer transmission (170ms → 350ms per letter) but significantly more reliable
+
+**Decoding System (Scanner Page):**
+- **State Machine**: Preamble → SOF → [Color Detection → Digit Collection → Verification] → EOF
+- **Dual-Channel Verification**:
+  1. Color channel: Perceptual LAB color space matching for letter detection
+  2. Numeric channel: Brightness pulse detection + wavelength reconstruction
+  3. Verification: Both channels must agree before adding letter to buffer
+- **Mode Selection**:
+  - Calibration detected (preamble present) → Dual-channel mode with full verification
+  - No calibration detected → Color-only legacy mode (backwards compatible)
+- **Error Recovery**: Mismatch/invalid wavelength sets guard flag to prevent infinite loops
+- **UI Feedback**: Real-time badges showing dual-channel status (match/mismatch/pending)
+
+**Technical Implementation:**
+- shared/encodingConfig.ts: PULSE_TIMING, DIGIT_BRIGHTNESS_LEVELS, wavelength conversion functions
+- client/src/lib/encoding.ts: generateCalibrationSequence(), brightnessToColor(), updated encodeMessage()
+- client/src/lib/colorDetection.ts: detectBrightness(), isGrayscale(), detectDigitFromBrightness(), reconstructWavelength()
+- client/src/components/camera-scanner.tsx: Full state machine with digitModeRef, calibrationDetectedRef, dual-channel verification
+- Fixed critical bugs: guard interval recovery on failures, calibration flag persistence through SOF
+
+**Design Rationale:**
+- Dual channels overcome camera variance and environmental lighting issues
+- Calibration sequence provides reference points for adaptive detection
+- Brightness encoding is more robust than timing-based binary encoding
+- Color-only fallback ensures backwards compatibility
+
+### November 15, 2025 - Camera-Based Wavelength Scanner (Initial Implementation)
 **Implemented complete camera scanning system for decoding visual signals from another device:**
 
 **Color Detection System:**
