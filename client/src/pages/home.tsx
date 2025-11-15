@@ -24,23 +24,26 @@ export default function Home() {
   const { toast } = useToast();
   
   const animationRef = useRef<number>();
-  const startTimeRef = useRef<number>();
-  const pausedTimeRef = useRef<number>(0);
+  const lastTimestampRef = useRef<number>();
 
   const totalDuration = calculateTotalDuration(encodedElements);
 
   const handleEncode = () => {
     const elements = encodeMessage(message, tsMs, tgMs);
     setEncodedElements(elements);
-    setDecodedMessage("");
+    
+    // Immediately decode to show the result
+    const decoded = decodeSignal(elements);
+    setDecodedMessage(decoded);
+    
     setCurrentIndex(-1);
     setCurrentTime(0);
     setIsPlaying(false);
-    pausedTimeRef.current = 0;
+    lastTimestampRef.current = undefined;
     
     toast({
       title: "Message Encoded",
-      description: `Generated ${elements.length} signal elements`,
+      description: `Generated ${elements.length} signal elements. Decoded: ${decoded}`,
     });
   };
 
@@ -49,10 +52,9 @@ export default function Home() {
     
     if (isPlaying) {
       setIsPlaying(false);
-      pausedTimeRef.current = currentTime;
     } else {
       setIsPlaying(true);
-      startTimeRef.current = performance.now() - pausedTimeRef.current;
+      lastTimestampRef.current = undefined;
     }
   };
 
@@ -60,7 +62,7 @@ export default function Home() {
     setIsPlaying(false);
     setCurrentIndex(-1);
     setCurrentTime(0);
-    pausedTimeRef.current = 0;
+    lastTimestampRef.current = undefined;
   };
 
   const handleResetParameters = () => {
@@ -81,39 +83,43 @@ export default function Home() {
     }
 
     const animate = (timestamp: number) => {
-      if (!startTimeRef.current) {
-        startTimeRef.current = timestamp;
+      if (!lastTimestampRef.current) {
+        lastTimestampRef.current = timestamp;
       }
 
-      const elapsed = (timestamp - startTimeRef.current) * speed;
-      setCurrentTime(elapsed);
+      const deltaTime = timestamp - lastTimestampRef.current;
+      lastTimestampRef.current = timestamp;
 
+      // Update current time by adding scaled delta
+      const newTime = Math.min(currentTime + (deltaTime * speed), totalDuration);
+      setCurrentTime(newTime);
+
+      // Find current element index based on accumulated duration
       let accumulatedTime = 0;
       let foundIndex = -1;
 
       for (let i = 0; i < encodedElements.length; i++) {
         accumulatedTime += encodedElements[i].duration;
-        if (elapsed < accumulatedTime) {
+        if (newTime < accumulatedTime) {
           foundIndex = i;
           break;
         }
       }
 
+      if (foundIndex === -1 && encodedElements.length > 0) {
+        foundIndex = encodedElements.length - 1;
+      }
+
       setCurrentIndex(foundIndex);
 
-      if (elapsed >= totalDuration) {
+      if (newTime >= totalDuration) {
         setIsPlaying(false);
         setCurrentIndex(encodedElements.length - 1);
         setCurrentTime(totalDuration);
-        pausedTimeRef.current = totalDuration;
-        
-        // Decode the message when animation completes
-        const decoded = decodeSignal(encodedElements);
-        setDecodedMessage(decoded);
         
         toast({
-          title: "Signal Complete",
-          description: `Message decoded: ${decoded}`,
+          title: "Animation Complete",
+          description: "Visual signal playback finished",
         });
       } else {
         animationRef.current = requestAnimationFrame(animate);
@@ -127,7 +133,7 @@ export default function Home() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isPlaying, encodedElements, speed, totalDuration, toast]);
+  }, [isPlaying, encodedElements, speed, totalDuration, toast, currentTime]);
 
   const progress = totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
 
