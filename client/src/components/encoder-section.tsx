@@ -9,12 +9,14 @@ interface EncoderSectionProps {
   message: string;
   onMessageChange: (message: string) => void;
   onEncode: () => void;
+  onClear?: () => void;
 }
 
 export function EncoderSection({
   message,
   onMessageChange,
   onEncode,
+  onClear,
 }: EncoderSectionProps) {
   const letterCount = message.replace(/[^A-Za-z]/g, "").length;
 
@@ -52,7 +54,10 @@ export function EncoderSection({
           <Button
             variant="outline"
             size="icon"
-            onClick={() => onMessageChange("")}
+            onClick={() => {
+              onMessageChange("");
+              onClear?.();
+            }}
             disabled={message.length === 0}
             data-testid="button-clear-encoder"
           >

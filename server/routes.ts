@@ -38,6 +38,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update a saved message
+  app.patch("/api/messages/:id", async (req, res) => {
+    try {
+      const validatedData = insertSavedMessageSchema.parse(req.body);
+      const updatedMessage = await storage.updateSavedMessage(req.params.id, validatedData);
+      if (!updatedMessage) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+      res.json(updatedMessage);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid message data" });
+    }
+  });
+
   // Delete a saved message
   app.delete("/api/messages/:id", async (req, res) => {
     try {

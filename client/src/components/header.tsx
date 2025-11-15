@@ -3,7 +3,7 @@ import { ThemeToggle } from "./theme-toggle";
 
 export function Header() {
   return (
-    <header className="h-16 border-b border-border flex items-center justify-between px-6">
+    <div className="flex items-center justify-between flex-1">
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center h-9 w-9 rounded-md bg-primary">
           <Radio className="h-5 w-5 text-primary-foreground" />
@@ -14,6 +14,6 @@ export function Header() {
         </div>
       </div>
       <ThemeToggle />
-    </header>
+    </div>
   );
 }

@@ -8,6 +8,24 @@ A web-based application that encodes text messages into visual color signal sequ
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### November 15, 2025 - Saved Message Library Feature
+**Implemented persistent message storage with update capability:**
+- PostgreSQL database integration with automatic fallback to in-memory storage when DATABASE_URL is unavailable
+- Sidebar UI displaying all saved messages with timing parameters (TS, TG values)
+- Full CRUD operations: Create (POST), Read (GET), Update (PATCH), Delete (DELETE)
+- Smart update workflow:
+  - After saving a new message, `loadedMessageId` is automatically set to enable subsequent updates
+  - Editing and re-encoding a loaded message preserves `loadedMessageId` for PATCH updates
+  - Clear button resets `loadedMessageId` to start a fresh message (POST)
+  - No accidental duplicates: edit cycles use PATCH, not POST
+- Button states reflect workflow: "Encode to Save" → "Save to Library" → "Update in Library"
+- Comprehensive error handling with toast notifications for save/update/delete failures
+- Lazy database initialization with Proxy pattern - server boots gracefully without DATABASE_URL
+
+**Design Decision:** Clear button resets `loadedMessageId` because clearing represents "start a new message", not "continue editing". Users who want to update existing messages should edit directly without clearing.
+
 ## System Architecture
 
 ### Frontend Architecture
@@ -31,32 +49,36 @@ Preferred communication style: Simple, everyday language.
 
 **Component Structure:**
 - Modular component architecture with separation between UI primitives (`/components/ui`) and application-specific components
-- Custom components: `EncoderSection`, `DecoderSection`, `ColorSignalVisualizer`, `AnimationControls`, `ParameterControls`
+- Custom components: `EncoderSection`, `DecoderSection`, `ColorSignalVisualizer`, `AnimationControls`, `ParameterControls`, `AppSidebar`
+- Shadcn sidebar for saved messages library with collapsible navigation
 - Theme system with dark mode as the primary design target
 - Path aliases configured for clean imports (`@/` for client source, `@shared/` for shared types)
 
 **State Management:**
 - Local React state for UI interactions and animation control
-- No complex global state management needed due to single-page nature
+- TanStack Query for server state (saved messages) with automatic cache invalidation
+- `loadedMessageId` state tracks current message for proper update workflow
 - Real-time encoding/decoding calculations performed client-side
 
 ### Backend Architecture
 
 **Technology Stack:**
 - **Express.js** with TypeScript for REST API
-- **In-memory storage** (MemStorage class) for saved messages
-- **Drizzle ORM** configured for PostgreSQL (currently unused but ready for database integration)
+- **PostgreSQL** database with graceful fallback to **MemStorage**
+- **Drizzle ORM** for type-safe database operations
+- **Lazy database initialization** prevents crashes when DATABASE_URL is missing
 
 **Design Rationale:**
 - Express provides lightweight HTTP server with straightforward routing
-- In-memory storage chosen for simplicity; can be swapped for PostgreSQL without changing the IStorage interface
-- RESTful API design for CRUD operations on saved messages
-- Separation of storage layer through IStorage interface allows easy migration to persistent database
+- Smart storage layer: uses PostgreSQL when DATABASE_URL exists, falls back to in-memory storage otherwise
+- RESTful API design for CRUD+Update operations on saved messages
+- Separation of storage layer through IStorage interface allows seamless swapping
 
 **API Endpoints:**
 - `GET /api/messages` - Retrieve all saved messages
 - `GET /api/messages/:id` - Retrieve specific message
 - `POST /api/messages` - Create new saved message
+- `PATCH /api/messages/:id` - Update existing saved message
 - `DELETE /api/messages/:id` - Delete saved message
 
 **Server Architecture:**
