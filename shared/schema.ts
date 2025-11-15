@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createInsertSchema } from "drizzle-zod";
-import { pgTable, text, varchar, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // Encoding parameters schema
@@ -38,3 +38,18 @@ export const insertSavedMessageSchema = createInsertSchema(savedMessages).omit({
 
 export type InsertSavedMessage = z.infer<typeof insertSavedMessageSchema>;
 export type SavedMessage = typeof savedMessages.$inferSelect;
+
+// Users table for mobile number authentication
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  mobileNumber: varchar("mobile_number", { length: 20 }).notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;

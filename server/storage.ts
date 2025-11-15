@@ -1,4 +1,4 @@
-import { type SavedMessage, type InsertSavedMessage, savedMessages } from "@shared/schema";
+import { type SavedMessage, type InsertSavedMessage, savedMessages, type User, type InsertUser, users } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
@@ -9,13 +9,19 @@ export interface IStorage {
   createSavedMessage(message: InsertSavedMessage): Promise<SavedMessage>;
   updateSavedMessage(id: string, message: InsertSavedMessage): Promise<SavedMessage | undefined>;
   deleteSavedMessage(id: string): Promise<boolean>;
+  
+  // User operations
+  getUserByMobileNumber(mobileNumber: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
 }
 
 class MemStorage implements IStorage {
   private savedMessages: Map<string, SavedMessage>;
+  private users: Map<string, User>;
 
   constructor() {
     this.savedMessages = new Map();
+    this.users = new Map();
   }
 
   async getSavedMessages(): Promise<SavedMessage[]> {
@@ -44,6 +50,17 @@ class MemStorage implements IStorage {
 
   async deleteSavedMessage(id: string): Promise<boolean> {
     return this.savedMessages.delete(id);
+  }
+
+  async getUserByMobileNumber(mobileNumber: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(u => u.mobileNumber === mobileNumber);
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = randomUUID();
+    const user: User = { ...insertUser, id, createdAt: new Date() };
+    this.users.set(id, user);
+    return user;
   }
 }
 
@@ -75,6 +92,16 @@ class DbStorage implements IStorage {
   async deleteSavedMessage(id: string): Promise<boolean> {
     const results = await this.db.delete(savedMessages).where(eq(savedMessages.id, id)).returning();
     return results.length > 0;
+  }
+
+  async getUserByMobileNumber(mobileNumber: string): Promise<User | undefined> {
+    const results = await this.db.select().from(users).where(eq(users.mobileNumber, mobileNumber));
+    return results[0];
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const results = await this.db.insert(users).values(insertUser).returning();
+    return results[0];
   }
 }
 

@@ -10,6 +10,44 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 15, 2025 - Mobile Number Authentication System
+**Implemented complete authentication system to protect camera scanner access:**
+
+**Authentication Flow:**
+- Mobile number-based login (no password required)
+- Session management using express-session with SESSION_SECRET
+- Protected route component prevents unauthorized access to scanner page
+- Automatic redirect to /login for unauthenticated users accessing /scanner
+- Header displays login/logout state with user badge showing mobile number
+
+**Database Schema:**
+- users table with id (UUID), mobileNumber (text), createdAt (timestamp)
+- PostgreSQL session store configuration (connect-pg-simple compatible)
+- TypeScript session type declarations for userId and mobileNumber
+
+**Security Features:**
+- SESSION_SECRET environment variable required (no hard-coded fallback)
+- HTTP-only cookies with 7-day expiration
+- Secure cookies in production mode
+- Session validation on protected routes
+
+**API Endpoints:**
+- POST /api/auth/login - Create/retrieve user and establish session
+- POST /api/auth/logout - Destroy session
+- GET /api/auth/me - Get current authenticated user or 401
+
+**UI Components:**
+- Login page (/login) - Mobile number input form with validation
+- ProtectedRoute wrapper - Enforces authentication on scanner page
+- Header integration - Shows user badge and logout button when authenticated
+- Toast notifications for login/logout feedback
+
+**Technical Implementation:**
+- TanStack Query for auth state management with automatic cache invalidation
+- Functional session management (create on login, destroy on logout)
+- End-to-end tested authentication flow with playwright verification
+- TypeScript type safety across client and server
+
 ### November 15, 2025 - Dual-Channel Encoding with Calibration System
 **Implemented complete dual-channel encoding/decoding for robust cross-device communication:**
 

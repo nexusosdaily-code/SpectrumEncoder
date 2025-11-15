@@ -1,9 +1,62 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertSavedMessageSchema } from "@shared/schema";
+import { insertSavedMessageSchema, insertUserSchema } from "@shared/schema";
+import { z } from "zod";
+import "./types"; // Import session type declarations
+
+// Mobile number validation schema
+const mobileNumberSchema = z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid mobile number format");
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Authentication routes
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { mobileNumber } = req.body;
+      const validated = mobileNumberSchema.parse(mobileNumber);
+      
+      // Check if user exists
+      let user = await storage.getUserByMobileNumber(validated);
+      
+      // Create new user if doesn't exist
+      if (!user) {
+        user = await storage.createUser({ mobileNumber: validated });
+      }
+      
+      // Set session
+      req.session.userId = user.id;
+      req.session.mobileNumber = user.mobileNumber;
+      
+      res.json({ user: { id: user.id, mobileNumber: user.mobileNumber } });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid mobile number format" });
+      }
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err: Error | null) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.session || !req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    res.json({
+      user: {
+        id: req.session.userId,
+        mobileNumber: req.session.mobileNumber
+      }
+    });
+  });
+
   // Get all saved messages
   app.get("/api/messages", async (_req, res) => {
     try {

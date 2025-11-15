@@ -5,15 +5,20 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { ProtectedRoute } from "@/components/protected-route";
 import Home from "@/pages/home";
 import Scanner from "@/pages/scanner";
+import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/scanner" component={Scanner} />
+      <Route path="/login" component={Login} />
+      <Route path="/scanner">
+        {() => <ProtectedRoute component={Scanner} />}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
