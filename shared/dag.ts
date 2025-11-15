@@ -106,11 +106,33 @@ export class DAGUtils {
     return JSON.stringify(signedData);
   }
   
-  static async verifyVertexSignature(signatureString: string): Promise<boolean> {
+  /**
+   * Verify vertex signature and ensure it matches the expected hash
+   * @param signatureString - The JSON-encoded SignedData
+   * @param expectedHash - The hash that should have been signed
+   */
+  static async verifyVertexSignature(signatureString: string, expectedHash?: string): Promise<boolean> {
     try {
       const signedData: SignedData = JSON.parse(signatureString);
-      return await verifySignature(signedData);
-    } catch {
+      
+      // Verify the cryptographic signature
+      const signatureValid = await verifySignature(signedData);
+      if (!signatureValid) {
+        return false;
+      }
+      
+      // If expected hash provided, verify it matches what was signed
+      if (expectedHash !== undefined && signedData.data !== expectedHash) {
+        console.error('[DAG] Signature valid but hash mismatch:', {
+          expected: expectedHash,
+          signed: signedData.data,
+        });
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('[DAG] Signature verification error:', error);
       return false;
     }
   }
@@ -202,27 +224,46 @@ export class DAGUtils {
     while (steps < maxSteps) {
       const currentApprovers = approvers.get(current.vertexHash) || [];
       
-      // If no approvers, we've found a tip
-      if (currentApprovers.length === 0) {
+      // Filter out approvers that reference vertices not in our current set
+      const validApprovers = currentApprovers.filter(approver => {
+        const tip1Exists = approver.tipReference1 === this.GENESIS_HASH || vertexMap.has(approver.tipReference1);
+        const tip2Exists = approver.tipReference2 === this.GENESIS_HASH || vertexMap.has(approver.tipReference2);
+        return tip1Exists && tip2Exists;
+      });
+      
+      // If no valid approvers, we've found a tip
+      if (validApprovers.length === 0) {
         return current;
       }
       
       // Weighted random selection of next vertex
       // Higher cumulative weight = higher probability
-      const totalWeight = currentApprovers.reduce((sum, v) => sum + Math.exp(alpha * v.cumulativeWeight), 0);
-      let random = rng() * totalWeight;
+      const totalWeight = validApprovers.reduce((sum, v) => {
+        const weight = v.cumulativeWeight > 0 ? v.cumulativeWeight : 1;
+        return sum + Math.exp(alpha * weight);
+      }, 0);
       
-      let next = currentApprovers[0];
-      for (const approver of currentApprovers) {
-        const weight = Math.exp(alpha * approver.cumulativeWeight);
-        random -= weight;
-        if (random <= 0) {
-          next = approver;
-          break;
+      if (totalWeight === 0) {
+        // Fallback to uniform random if all weights are zero
+        const randomIndex = Math.floor(rng() * validApprovers.length);
+        current = validApprovers[randomIndex];
+      } else {
+        let random = rng() * totalWeight;
+        
+        let next = validApprovers[0];
+        for (const approver of validApprovers) {
+          const weight = approver.cumulativeWeight > 0 ? approver.cumulativeWeight : 1;
+          const weightedValue = Math.exp(alpha * weight);
+          random -= weightedValue;
+          if (random <= 0) {
+            next = approver;
+            break;
+          }
         }
+        
+        current = next;
       }
       
-      current = next;
       steps++;
     }
     
@@ -544,7 +585,7 @@ export class VertexBuilder {
       depth: this.tips.depth,
       payloadType: this.payload.type,
       payloadHash,
-      payloadData: JSON.stringify(this.payload.data),
+      payloadData: JSON.stringify(this.payload), // Store FULL payload including timestamp
       engagementProof,
       signature,
     };

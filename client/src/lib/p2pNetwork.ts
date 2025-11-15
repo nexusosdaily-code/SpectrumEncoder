@@ -9,7 +9,8 @@ import { bootstrap } from '@libp2p/bootstrap';
 import { dagStorage } from './dagStorage';
 import { DAGUtils, VertexBuilder, type VertexPayload } from '@/../../shared/dag';
 import type { DagVertex, NetworkNode } from '@/../../shared/schema';
-import { generateKeyPair, exportPrivateKey, importPrivateKey, type KeyPair } from '@/../../shared/crypto';
+import { type KeyPair, NonceTracker } from '@/../../shared/crypto';
+import { keyStore } from './keyStore';
 
 export interface P2PConfig {
   bootstrapPeers: string[];
@@ -34,6 +35,7 @@ export class P2PNetwork {
   private messageHandlers: Map<string, P2PMessageHandler[]> = new Map();
   private stats: Map<string, PeerStats> = new Map();
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private nonceTracker: NonceTracker = new NonceTracker();
 
   async init(config: P2PConfig): Promise<void> {
     this.config = config;
@@ -197,13 +199,85 @@ export class P2PNetwork {
     this.messageHandlers.set(topic, handlers);
   }
 
-  private handleIncomingMessage(message: any): void {
+  private async handleIncomingMessage(message: any): Promise<void> {
     try {
       const decoder = new TextDecoder();
       const text = decoder.decode(message.data);
       const data = JSON.parse(text);
       
       const fromPeerId = message.from?.toString() || 'unknown';
+      
+      // Verify vertex signature if present
+      if (data.type === 'relay' || data.type === 'verification') {
+        const vertex = data.vertex as DagVertex;
+        
+        // Verify engagement proof with nonce tracking
+        if (vertex.engagementProof) {
+          const isValid = await DAGUtils.verifyEngagementProof(vertex.engagementProof);
+          if (!isValid) {
+            console.warn('[P2P] Invalid engagement proof from peer:', fromPeerId);
+            return;
+          }
+          
+          // Check for replay attacks
+          try {
+            const proofData = JSON.parse(vertex.engagementProof);
+            if (this.nonceTracker.hasSeenNonce(proofData.nonce, proofData.timestamp)) {
+              console.warn('[P2P] Replay attack detected from peer:', fromPeerId);
+              return;
+            }
+          } catch (error) {
+            console.error('[P2P] Failed to parse engagement proof for replay check:', error);
+            return;
+          }
+        }
+        
+        // Verify vertex signature AND hash integrity
+        if (vertex.signature) {
+          // Verify payload integrity first
+          if (!vertex.payloadData) {
+            console.warn('[P2P] Missing payload data from peer:', fromPeerId);
+            return;
+          }
+          
+          let payload: VertexPayload;
+          try {
+            payload = JSON.parse(vertex.payloadData);
+          } catch (error) {
+            console.error('[P2P] Failed to parse payload data:', error);
+            return;
+          }
+          
+          // Recompute payload hash and verify it matches
+          const computedPayloadHash = await DAGUtils.calculatePayloadHash(payload);
+          if (computedPayloadHash !== vertex.payloadHash) {
+            console.warn('[P2P] Payload hash mismatch - payload tampering detected from peer:', fromPeerId);
+            return;
+          }
+          
+          // Recalculate the vertex hash using the payload timestamp
+          const computedVertexHash = DAGUtils.calculateVertexHash({
+            tipReference1: vertex.tipReference1,
+            tipReference2: vertex.tipReference2,
+            payloadHash: vertex.payloadHash,
+            nodeId: vertex.nodeId,
+            timestamp: payload.timestamp,
+          });
+          
+          // Verify signature AND that it signed the correct hash
+          const signatureValid = await DAGUtils.verifyVertexSignature(vertex.signature, computedVertexHash);
+          if (!signatureValid) {
+            console.warn('[P2P] Invalid vertex signature or hash mismatch from peer:', fromPeerId);
+            return;
+          }
+          
+          // Verify claimed vertex hash matches what we computed
+          if (vertex.vertexHash !== computedVertexHash) {
+            console.warn('[P2P] Vertex hash mismatch from peer:', fromPeerId);
+            return;
+          }
+        }
+      }
       
       const stats = this.stats.get(fromPeerId) || {
         peerId: fromPeerId,
@@ -219,13 +293,13 @@ export class P2PNetwork {
 
       const handlers = this.messageHandlers.get(message.topic);
       if (handlers) {
-        handlers.forEach(handler => {
+        for (const handler of handlers) {
           try {
             handler(data, fromPeerId);
           } catch (error) {
             console.error('[P2P] Message handler error:', error);
           }
-        });
+        }
       }
     } catch (error) {
       console.error('[P2P] Failed to parse incoming message:', error);
@@ -261,39 +335,17 @@ export class P2PNetwork {
   }
   
   /**
-   * Generate or load cryptographic keys for the P2P node
+   * Generate or load cryptographic keys for the P2P node using secure storage
    */
   static async generateKeys(): Promise<KeyPair> {
-    // Check if keys are stored in IndexedDB
-    try {
-      const stored = localStorage.getItem('p2p-keypair');
-      if (stored) {
-        const { publicKeyHex, privateKeyHex } = JSON.parse(stored);
-        const privateKey = await importPrivateKey(privateKeyHex);
-        const publicKeyBuffer = new Uint8Array(publicKeyHex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
-        const publicKey = await crypto.subtle.importKey('raw', publicKeyBuffer, { name: 'Ed25519' }, true, ['verify']);
-        
-        return { publicKey, privateKey, publicKeyHex };
-      }
-    } catch (error) {
-      console.warn('[P2P] Failed to load stored keys, generating new ones:', error);
-    }
-    
-    // Generate new keys
-    const keyPair = await generateKeyPair();
-    const privateKeyHex = await exportPrivateKey(keyPair.privateKey);
-    
-    // Store for future use
-    try {
-      localStorage.setItem('p2p-keypair', JSON.stringify({
-        publicKeyHex: keyPair.publicKeyHex,
-        privateKeyHex,
-      }));
-    } catch (error) {
-      console.warn('[P2P] Failed to store keys:', error);
-    }
-    
-    return keyPair;
+    return await keyStore.getOrGenerateKeys();
+  }
+  
+  /**
+   * Get nonce tracker statistics
+   */
+  getNonceTrackerStats() {
+    return this.nonceTracker.getStats();
   }
 
   async relayMessage(messageData: any): Promise<DagVertex> {
