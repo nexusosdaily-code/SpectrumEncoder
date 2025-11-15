@@ -22,8 +22,6 @@ export interface EncodedSymbol {
   index: number;
 }
 
-declare const self: DedicatedWorkerGlobalScope;
-
 function serializeError(err: unknown) {
   if (err instanceof Error) {
     return {
