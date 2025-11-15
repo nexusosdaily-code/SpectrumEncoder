@@ -1,4 +1,5 @@
 import { LETTER_WAVELENGTH, WAVELENGTH_TO_LETTER, SOF, EOF, VISIBLE_MIN_NM, VISIBLE_MAX_NM, SPECTRUM_MAP } from "@shared/constants";
+import { DIGIT_BRIGHTNESS_LEVELS, brightnessToDigit } from "@shared/encodingConfig";
 
 /**
  * Convert RGB to LAB color space for perceptual color matching
@@ -211,4 +212,54 @@ export function sampleCenterColor(
     g: Math.round(totalG / pixels),
     b: Math.round(totalB / pixels),
   };
+}
+
+/**
+ * Detect brightness level from RGB (for digit pulse detection)
+ * Returns normalized brightness 0.0-1.0
+ */
+export function detectBrightness(r: number, g: number, b: number): number {
+  // Use perceived luminance formula (ITU-R BT.709)
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+/**
+ * Check if color appears to be grayscale (for digit pulse detection)
+ * Grayscale colors have similar R, G, B values
+ */
+export function isGrayscale(r: number, g: number, b: number, tolerance: number = 20): boolean {
+  const avg = (r + g + b) / 3;
+  return (
+    Math.abs(r - avg) < tolerance &&
+    Math.abs(g - avg) < tolerance &&
+    Math.abs(b - avg) < tolerance
+  );
+}
+
+/**
+ * Detect digit from brightness pulse
+ * Returns digit 0-9 or null if no clear match
+ */
+export function detectDigitFromBrightness(r: number, g: number, b: number): number | null {
+  // First check if it's grayscale (digit pulses are always grayscale)
+  if (!isGrayscale(r, g, b, 25)) {
+    return null;
+  }
+  
+  const brightness = detectBrightness(r, g, b);
+  return brightnessToDigit(brightness);
+}
+
+/**
+ * Reconstruct wavelength from three detected digits
+ */
+export function reconstructWavelength(digit1: number, digit2: number, digit3: number): number {
+  return digit1 * 100 + digit2 * 10 + digit3;
+}
+
+/**
+ * Verify wavelength is in valid visible spectrum range
+ */
+export function isValidWavelength(wavelength: number): boolean {
+  return wavelength >= VISIBLE_MIN_NM && wavelength <= VISIBLE_MAX_NM;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Camera, CameraOff, Activity } from "lucide-react";
+import { Camera, CameraOff, Activity, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   sampleCenterColor,
@@ -11,7 +11,12 @@ import {
   isBlackColor,
   isWhiteColor,
   rgbToWavelength,
+  detectDigitFromBrightness,
+  reconstructWavelength,
+  isValidWavelength,
+  isGrayscale,
 } from "@/lib/colorDetection";
+import { WAVELENGTH_TO_LETTER } from "@shared/constants";
 
 interface CameraScannerProps {
   onMessageDetected?: (message: string) => void;
@@ -30,11 +35,22 @@ export function CameraScanner({ onMessageDetected }: CameraScannerProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState<string>("Ready to scan");
   const [error, setError] = useState<string | null>(null);
+  const [dualChannelStatus, setDualChannelStatus] = useState<'match' | 'mismatch' | 'pending' | null>(null);
+  
   const lastDetectedLetterRef = useRef<string | null>(null);
   const letterFrameCountRef = useRef<number>(0);
   const currentLetterRef = useRef<string | null>(null);
   const inGuardIntervalRef = useRef<boolean>(false);
   const LETTER_THRESHOLD = 2; // Require 2+ consecutive same-color frames to confirm letter
+  
+  // Digit pulse detection state
+  const digitBufferRef = useRef<number[]>([]);
+  const pendingColorLetterRef = useRef<string | null>(null);
+  const digitModeRef = useRef<boolean>(false);
+  const lastDigitRef = useRef<number | null>(null);
+  const digitConfirmCountRef = useRef<number>(0);
+  const DIGIT_THRESHOLD = 2; // Require 2+ consecutive frames to confirm digit
+  const calibrationDetectedRef = useRef<boolean>(false); // Track if calibration preamble was seen
 
   const startCamera = async () => {
     try {
@@ -113,6 +129,11 @@ export function CameraScanner({ onMessageDetected }: CameraScannerProps) {
       letterFrameCountRef.current = 0;
       currentLetterRef.current = null;
       inGuardIntervalRef.current = false;
+      digitModeRef.current = false;
+      digitBufferRef.current = [];
+      pendingColorLetterRef.current = null;
+      // DON'T reset calibrationDetectedRef here - it was set by preamble and needs to persist
+      setDualChannelStatus(null);
     } else if (isEofColor(r, g, b)) {
       setDetectedLetter("EOF");
       if (isRecording && buffer.length > 0) {
@@ -127,54 +148,163 @@ export function CameraScanner({ onMessageDetected }: CameraScannerProps) {
       letterFrameCountRef.current = 0;
       currentLetterRef.current = null;
       inGuardIntervalRef.current = false;
+      digitModeRef.current = false;
+      digitBufferRef.current = [];
+      pendingColorLetterRef.current = null;
+      calibrationDetectedRef.current = false; // Reset ONLY on EOF (end of message)
     } else if (isBlackColor(r, g, b)) {
-      setDetectedLetter("GUARD");
-      letterFrameCountRef.current = 0;
-      currentLetterRef.current = null;
-      
-      // Mark that we're in a guard interval - this allows next letter to be added
-      // even if it's the same as the previous one
-      inGuardIntervalRef.current = true;
+      if (digitModeRef.current) {
+        // Mini-guard between digits - reset digit confirmation but stay in digit mode
+        setDetectedLetter("MINI-GUARD");
+        lastDigitRef.current = null;
+        digitConfirmCountRef.current = 0;
+      } else {
+        // Main guard between letters
+        setDetectedLetter("GUARD");
+        letterFrameCountRef.current = 0;
+        currentLetterRef.current = null;
+        
+        // Mark that we're in a guard interval - this allows next letter to be added
+        // even if it's the same as the previous one
+        inGuardIntervalRef.current = true;
+      }
     } else if (isWhiteColor(r, g, b)) {
       setDetectedLetter("PREAMBLE");
       setStatus("Preamble detected - waiting for SOF");
       letterFrameCountRef.current = 0;
       currentLetterRef.current = null;
       inGuardIntervalRef.current = false;
+      calibrationDetectedRef.current = true; // Mark that we saw calibration preamble
     } else {
-      // Try to detect letter using perceptual color matching
-      const letter = detectLetterFromRgb(r, g, b, 30);
-      setDetectedLetter(letter);
-      
-      if (isRecording && letter) {
-        // Track consecutive frames of the same letter
-        if (currentLetterRef.current === letter) {
-          letterFrameCountRef.current++;
-        } else {
-          currentLetterRef.current = letter;
-          letterFrameCountRef.current = 1;
-        }
+      // Color or digit detection based on current mode
+      if (digitModeRef.current) {
+        // IN DIGIT MODE - detect brightness pulses
+        const digit = detectDigitFromBrightness(r, g, b);
         
-        // Add to buffer after confirmed letter detection (2+ consecutive frames)
-        if (letterFrameCountRef.current >= LETTER_THRESHOLD) {
-          // Add letter if:
-          // 1. It's different from the last buffered letter, OR
-          // 2. We just exited a guard interval (allows repeated letters)
-          if (lastDetectedLetterRef.current !== letter || inGuardIntervalRef.current) {
-            setBuffer(prev => {
-              const updated = [...prev, letter];
-              setStatus(`Recording: ${updated.join("")}`);
-              return updated;
-            });
-            lastDetectedLetterRef.current = letter;
-            inGuardIntervalRef.current = false; // Clear guard flag after using it
-            letterFrameCountRef.current = 0; // Reset counter after adding
+        if (digit !== null) {
+          // Track consecutive frames of same digit
+          if (lastDigitRef.current === digit) {
+            digitConfirmCountRef.current++;
+          } else {
+            lastDigitRef.current = digit;
+            digitConfirmCountRef.current = 1;
           }
+          
+          setDetectedLetter(`DIGIT:${digit}`);
+          
+          // Confirm digit after DIGIT_THRESHOLD consecutive frames
+          if (digitConfirmCountRef.current >= DIGIT_THRESHOLD) {
+            digitBufferRef.current.push(digit);
+            setStatus(`Digits collected: ${digitBufferRef.current.join("")} (${digitBufferRef.current.length}/3)`);
+            
+            // Reset for next digit
+            lastDigitRef.current = null;
+            digitConfirmCountRef.current = 0;
+            
+            // After 3 digits, verify and process
+            if (digitBufferRef.current.length === 3) {
+              const [d1, d2, d3] = digitBufferRef.current;
+              const wavelength = reconstructWavelength(d1, d2, d3);
+              
+              if (isValidWavelength(wavelength)) {
+                const numericLetter = WAVELENGTH_TO_LETTER[wavelength];
+                const colorLetter = pendingColorLetterRef.current;
+                
+                if (numericLetter && numericLetter === colorLetter) {
+                  // Channels match - add to buffer
+                  setBuffer(prev => {
+                    const updated = [...prev, colorLetter!];
+                    setStatus(`✓ Dual-channel match: ${colorLetter} (${wavelength}nm) - Recording: ${updated.join("")}`);
+                    return updated;
+                  });
+                  setDualChannelStatus('match');
+                  lastDetectedLetterRef.current = colorLetter;
+                } else {
+                  // Channels disagree
+                  setDualChannelStatus('mismatch');
+                  setStatus(`✗ Channel mismatch: color=${colorLetter}, numeric=${numericLetter} (${wavelength}nm)`);
+                  console.warn(`Channel mismatch: color=${colorLetter}, numeric=${numericLetter}, wavelength=${wavelength}`);
+                }
+              } else {
+                console.warn(`Invalid wavelength: ${wavelength} from digits ${d1}${d2}${d3}`);
+                setStatus(`⚠ Invalid wavelength: ${wavelength}nm`);
+              }
+              
+              // Exit digit mode and reset
+              // CRITICAL: Set inGuardIntervalRef = true to allow state machine advancement
+              digitModeRef.current = false;
+              digitBufferRef.current = [];
+              pendingColorLetterRef.current = null;
+              lastDetectedLetterRef.current = null;
+              inGuardIntervalRef.current = true;
+            }
+          }
+        } else {
+          // Non-grayscale in digit mode - error, reset
+          setStatus("⚠ Error: Non-grayscale pulse in digit mode, resetting...");
+          console.warn("Non-grayscale color detected in digit mode");
+          digitModeRef.current = false;
+          digitBufferRef.current = [];
+          pendingColorLetterRef.current = null;
+          lastDigitRef.current = null;
+          digitConfirmCountRef.current = 0;
+          // CRITICAL: Set inGuardIntervalRef = true to allow state machine advancement
+          lastDetectedLetterRef.current = null;
+          inGuardIntervalRef.current = true;
         }
       } else {
-        // Reset counters if not recording or no letter detected
-        letterFrameCountRef.current = 0;
-        currentLetterRef.current = null;
+        // NORMAL COLOR DETECTION MODE
+        const letter = detectLetterFromRgb(r, g, b, 30);
+        setDetectedLetter(letter);
+        
+        if (isRecording && letter) {
+          // Track consecutive frames of the same letter
+          if (currentLetterRef.current === letter) {
+            letterFrameCountRef.current++;
+          } else {
+            currentLetterRef.current = letter;
+            letterFrameCountRef.current = 1;
+          }
+          
+          // After confirmed letter detection, decide whether to use dual-channel or color-only
+          if (letterFrameCountRef.current >= LETTER_THRESHOLD) {
+            // Only enter digit mode if this is a new letter (not a duplicate)
+            if (lastDetectedLetterRef.current !== letter || inGuardIntervalRef.current) {
+              if (calibrationDetectedRef.current) {
+                // Calibration detected - enter digit mode for dual-channel verification
+                digitModeRef.current = true;
+                pendingColorLetterRef.current = letter;
+                digitBufferRef.current = [];
+                lastDigitRef.current = null;
+                digitConfirmCountRef.current = 0;
+                
+                setStatus(`Color detected: ${letter}, waiting for digit pulses...`);
+                setDualChannelStatus('pending');
+                
+                // Reset letter confirmation
+                letterFrameCountRef.current = 0;
+                currentLetterRef.current = null;
+              } else {
+                // No calibration - use color-only mode (legacy support)
+                setBuffer(prev => {
+                  const updated = [...prev, letter];
+                  setStatus(`Color-only mode: ${updated.join("")}`);
+                  return updated;
+                });
+                lastDetectedLetterRef.current = letter;
+                inGuardIntervalRef.current = false;
+                
+                // Reset letter confirmation
+                letterFrameCountRef.current = 0;
+                currentLetterRef.current = null;
+              }
+            }
+          }
+        } else {
+          // Reset counters if not recording or no letter detected
+          letterFrameCountRef.current = 0;
+          currentLetterRef.current = null;
+        }
       }
     }
     
@@ -264,6 +394,29 @@ export function CameraScanner({ onMessageDetected }: CameraScannerProps) {
             </div>
           </div>
         </div>
+
+        {dualChannelStatus && (
+          <div className="flex items-center gap-2">
+            {dualChannelStatus === 'match' && (
+              <Badge variant="default" className="gap-1" data-testid="badge-channel-match">
+                <CheckCircle2 className="h-3 w-3" />
+                Dual-Channel Match
+              </Badge>
+            )}
+            {dualChannelStatus === 'mismatch' && (
+              <Badge variant="destructive" className="gap-1" data-testid="badge-channel-mismatch">
+                <AlertTriangle className="h-3 w-3" />
+                Channel Mismatch
+              </Badge>
+            )}
+            {dualChannelStatus === 'pending' && (
+              <Badge variant="outline" className="gap-1" data-testid="badge-channel-pending">
+                <Activity className="h-3 w-3 animate-pulse" />
+                Awaiting Digit Pulses
+              </Badge>
+            )}
+          </div>
+        )}
 
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Buffered Message</div>
