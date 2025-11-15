@@ -132,7 +132,8 @@ export default function Home() {
     setTgMs(savedMsg.tgMs);
     setLoadedMessageId(savedMsg.id);
     
-    const elements = encodeMessage(savedMsg.message, savedMsg.tsMs, savedMsg.tgMs);
+    // Encode with loaded parameters AND current calibration setting
+    const elements = encodeMessage(savedMsg.message, savedMsg.tsMs, savedMsg.tgMs, includeCalibration);
     setEncodedElements(elements);
     
     const decoded = decodeSignal(elements);
