@@ -49,6 +49,11 @@ export const users = pgTable("users", {
   verificationCodeExpiry: timestamp("verification_code_expiry"),
   latitude: text("latitude"), // User location latitude
   longitude: text("longitude"), // User location longitude
+  displayName: varchar("display_name", { length: 100 }), // Optional display name
+  bio: text("bio"), // User bio/description
+  avatarUrl: text("avatar_url"), // Profile picture URL
+  isOnline: varchar("is_online", { length: 10 }).notNull().default('false'), // Network node status
+  lastSeen: timestamp("last_seen"), // Last active timestamp
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -79,3 +84,43 @@ export const insertUserMessageSchema = createInsertSchema(userMessages).omit({
 
 export type InsertUserMessage = z.infer<typeof insertUserMessageSchema>;
 export type UserMessage = typeof userMessages.$inferSelect;
+
+// User followers/following relationships
+export const userFollowers = pgTable("user_followers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  followerId: varchar("follower_id").notNull().references(() => users.id),
+  followingId: varchar("following_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUserFollowerSchema = createInsertSchema(userFollowers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertUserFollower = z.infer<typeof insertUserFollowerSchema>;
+export type UserFollower = typeof userFollowers.$inferSelect;
+
+// Network security nodes - tracks active peer connections
+export const networkNodes = pgTable("network_nodes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  ipAddress: varchar("ip_address", { length: 45 }), // IPv4 or IPv6
+  userAgent: text("user_agent"), // Browser/device info
+  isActive: varchar("is_active", { length: 10 }).notNull().default('true'),
+  lastHeartbeat: timestamp("last_heartbeat").defaultNow().notNull(), // Last ping time
+  peerConnections: integer("peer_connections").notNull().default(0), // Number of active peer connections
+  securityScore: integer("security_score").notNull().default(100), // 0-100 security health score
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertNetworkNodeSchema = createInsertSchema(networkNodes).omit({
+  id: true,
+  createdAt: true,
+  isActive: true,
+  peerConnections: true,
+  securityScore: true,
+});
+
+export type InsertNetworkNode = z.infer<typeof insertNetworkNodeSchema>;
+export type NetworkNode = typeof networkNodes.$inferSelect;

@@ -1,4 +1,4 @@
-import { type SavedMessage, type InsertSavedMessage, savedMessages, type User, type InsertUser, users, type UserMessage, type InsertUserMessage, userMessages } from "@shared/schema";
+import { type SavedMessage, type InsertSavedMessage, savedMessages, type User, type InsertUser, users, type UserMessage, type InsertUserMessage, userMessages, type UserFollower, type InsertUserFollower, userFollowers, type NetworkNode, type InsertNetworkNode, networkNodes } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { eq, desc, and, or } from "drizzle-orm";
 import { db } from "./db";
@@ -12,6 +12,19 @@ export interface MessageListResult {
   hasMore: boolean;
 }
 
+export interface UserProfile extends User {
+  followerCount: number;
+  followingCount: number;
+  isFollowing?: boolean;
+}
+
+export interface NetworkStats {
+  totalNodes: number;
+  activeNodes: number;
+  avgSecurityScore: number;
+  totalPeerConnections: number;
+}
+
 export interface IStorage {
   getSavedMessages(): Promise<SavedMessage[]>;
   getSavedMessage(id: string): Promise<SavedMessage | undefined>;
@@ -21,10 +34,30 @@ export interface IStorage {
   
   // User operations
   getUserByMobileNumber(mobileNumber: string): Promise<User | undefined>;
+  getUserById(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserVerificationCode(mobileNumber: string, code: string, expiry: Date): Promise<User | undefined>;
   verifyUserCode(mobileNumber: string, code: string): Promise<User | undefined>;
   updateUserLocation(mobileNumber: string, latitude: string, longitude: string): Promise<User | undefined>;
+  updateUserProfile(userId: string, updates: { displayName?: string; bio?: string; avatarUrl?: string }): Promise<User | undefined>;
+  updateUserOnlineStatus(userId: string, isOnline: boolean): Promise<User | undefined>;
+  searchUsers(query: string, limit?: number): Promise<User[]>;
+  
+  // Follower operations
+  followUser(followerId: string, followingId: string): Promise<UserFollower>;
+  unfollowUser(followerId: string, followingId: string): Promise<boolean>;
+  isFollowing(followerId: string, followingId: string): Promise<boolean>;
+  getUserProfile(userId: string, viewerId?: string): Promise<UserProfile | undefined>;
+  getFollowers(userId: string, limit?: number): Promise<User[]>;
+  getFollowing(userId: string, limit?: number): Promise<User[]>;
+  
+  // Network security operations
+  createNetworkNode(node: InsertNetworkNode): Promise<NetworkNode>;
+  updateNodeHeartbeat(nodeId: string, peerConnections: number): Promise<NetworkNode | undefined>;
+  deactivateNode(nodeId: string): Promise<boolean>;
+  getUserNodes(userId: string): Promise<NetworkNode[]>;
+  getNetworkStats(): Promise<NetworkStats>;
+  getActiveNodes(limit?: number): Promise<NetworkNode[]>;
   
   // Messaging operations
   sendMessage(senderId: string, recipientMobileNumber: string, messageContent: string): Promise<UserMessage>;
