@@ -1,7 +1,8 @@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Sparkles, Trash2, Scan } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Tooltip,
@@ -14,6 +15,8 @@ interface EncoderSectionProps {
   onMessageChange: (message: string) => void;
   onEncode: () => void;
   onClear?: () => void;
+  includeCalibration?: boolean;
+  setIncludeCalibration?: (value: boolean) => void;
 }
 
 export function EncoderSection({
@@ -21,6 +24,8 @@ export function EncoderSection({
   onMessageChange,
   onEncode,
   onClear,
+  includeCalibration = true,
+  setIncludeCalibration,
 }: EncoderSectionProps) {
   const letterCount = message.replace(/[^A-Za-z]/g, "").length;
 
@@ -44,6 +49,29 @@ export function EncoderSection({
           className="h-40 resize-none font-mono text-base"
           data-testid="textarea-encoder"
         />
+
+        {/* Calibration option */}
+        <div className="flex items-start gap-3 p-3 rounded-md bg-muted/50">
+          <Checkbox
+            id="include-calibration"
+            checked={includeCalibration}
+            onCheckedChange={(checked) => setIncludeCalibration?.(checked as boolean)}
+            data-testid="checkbox-calibration"
+          />
+          <div className="space-y-1">
+            <Label
+              htmlFor="include-calibration"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer"
+            >
+              <Scan className="h-3.5 w-3.5" />
+              Include Calibration Sequence
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Adds calibration frames for reliable detection across different cameras and lighting.
+              Increases signal length but significantly improves accuracy.
+            </p>
+          </div>
+        </div>
 
         <div className="flex gap-2">
           <Button

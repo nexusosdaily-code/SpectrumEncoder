@@ -28,6 +28,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [loadedMessageId, setLoadedMessageId] = useState<string | null>(null);
+  const [includeCalibration, setIncludeCalibration] = useState(true); // Default enabled for reliable detection
   const { toast} = useToast();
   
   const animationRef = useRef<number>();
@@ -36,7 +37,7 @@ export default function Home() {
   const totalDuration = calculateTotalDuration(encodedElements);
 
   const handleEncode = () => {
-    const elements = encodeMessage(message, tsMs, tgMs);
+    const elements = encodeMessage(message, tsMs, tgMs, includeCalibration);
     setEncodedElements(elements);
     
     // Immediately decode to show the result
@@ -234,6 +235,8 @@ export default function Home() {
                     setEncodedElements([]);
                     setDecodedMessage("");
                   }}
+                  includeCalibration={includeCalibration}
+                  setIncludeCalibration={setIncludeCalibration}
                 />
 
                 {message.trim() && (

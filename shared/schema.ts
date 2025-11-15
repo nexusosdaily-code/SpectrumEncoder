@@ -16,8 +16,10 @@ export const colorSignalElementSchema = z.object({
   color: z.string(),
   letter: z.string().optional(),
   duration: z.number(),
-  type: z.enum(['preamble-white', 'preamble-black', 'sof', 'eof', 'letter', 'guard']),
+  type: z.enum(['preamble-white', 'preamble-black', 'sof', 'eof', 'letter', 'guard', 'digit-pulse', 'mini-guard', 'calibration-white', 'calibration-black', 'calibration-ref']),
   wavelengthNm: z.number().optional(),
+  digitValue: z.number().optional(), // 0-9 for digit pulses
+  brightness: z.number().optional(), // 0-1 brightness level for digit pulses
 });
 
 export type ColorSignalElement = z.infer<typeof colorSignalElementSchema>;
