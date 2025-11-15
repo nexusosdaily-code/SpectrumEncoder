@@ -1,6 +1,6 @@
 import { type SavedMessage, type InsertSavedMessage, savedMessages, type User, type InsertUser, users, type UserMessage, type InsertUserMessage, userMessages, type UserFollower, type InsertUserFollower, userFollowers, type NetworkNode, type InsertNetworkNode, networkNodes } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { eq, desc, and, or } from "drizzle-orm";
+import { eq, desc, and, or, ilike, sql, count } from "drizzle-orm";
 import { db } from "./db";
 
 export interface MessageWithSender extends UserMessage {
@@ -71,11 +71,15 @@ class MemStorage implements IStorage {
   private savedMessages: Map<string, SavedMessage>;
   private users: Map<string, User>;
   private userMessages: Map<string, UserMessage>;
+  private userFollowers: Map<string, UserFollower>;
+  private networkNodes: Map<string, NetworkNode>;
 
   constructor() {
     this.savedMessages = new Map();
     this.users = new Map();
     this.userMessages = new Map();
+    this.userFollowers = new Map();
+    this.networkNodes = new Map();
   }
 
   async getSavedMessages(): Promise<SavedMessage[]> {
@@ -120,6 +124,11 @@ class MemStorage implements IStorage {
       verificationCodeExpiry: insertUser.verificationCodeExpiry ?? null,
       latitude: insertUser.latitude ?? null,
       longitude: insertUser.longitude ?? null,
+      displayName: insertUser.displayName ?? null,
+      bio: insertUser.bio ?? null,
+      avatarUrl: insertUser.avatarUrl ?? null,
+      isOnline: insertUser.isOnline ?? 'false',
+      lastSeen: insertUser.lastSeen ?? null,
       createdAt: new Date() 
     };
     this.users.set(id, user);
@@ -239,6 +248,207 @@ class MemStorage implements IStorage {
     return Array.from(this.userMessages.values())
       .filter(m => m.recipientMobileNumber === recipientMobileNumber && m.status === 'pending')
       .length;
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async updateUserProfile(userId: string, updates: { displayName?: string; bio?: string; avatarUrl?: string }): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+
+    const updated: User = {
+      ...user,
+      ...(updates.displayName !== undefined && { displayName: updates.displayName }),
+      ...(updates.bio !== undefined && { bio: updates.bio }),
+      ...(updates.avatarUrl !== undefined && { avatarUrl: updates.avatarUrl }),
+    };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async updateUserOnlineStatus(userId: string, isOnline: boolean): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+
+    const updated: User = {
+      ...user,
+      isOnline: isOnline ? 'true' : 'false',
+      lastSeen: new Date(),
+    };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async searchUsers(query: string, limit = 20): Promise<User[]> {
+    const lowerQuery = query.toLowerCase();
+    return Array.from(this.users.values())
+      .filter(u => 
+        (u.displayName && u.displayName.toLowerCase().includes(lowerQuery)) ||
+        u.mobileNumber.toLowerCase().includes(lowerQuery)
+      )
+      .slice(0, limit);
+  }
+
+  async followUser(followerId: string, followingId: string): Promise<UserFollower> {
+    if (followerId === followingId) {
+      throw new Error("Cannot follow yourself");
+    }
+
+    const existing = Array.from(this.userFollowers.values()).find(
+      f => f.followerId === followerId && f.followingId === followingId
+    );
+    
+    if (existing) {
+      return existing;
+    }
+
+    const id = randomUUID();
+    const follower: UserFollower = {
+      id,
+      followerId,
+      followingId,
+      createdAt: new Date(),
+    };
+    this.userFollowers.set(id, follower);
+    return follower;
+  }
+
+  async unfollowUser(followerId: string, followingId: string): Promise<boolean> {
+    const existing = Array.from(this.userFollowers.entries()).find(
+      ([_, f]) => f.followerId === followerId && f.followingId === followingId
+    );
+    
+    if (!existing) return false;
+    
+    return this.userFollowers.delete(existing[0]);
+  }
+
+  async isFollowing(followerId: string, followingId: string): Promise<boolean> {
+    return Array.from(this.userFollowers.values()).some(
+      f => f.followerId === followerId && f.followingId === followingId
+    );
+  }
+
+  async getUserProfile(userId: string, viewerId?: string): Promise<UserProfile | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+
+    const followerCount = Array.from(this.userFollowers.values()).filter(
+      f => f.followingId === userId
+    ).length;
+
+    const followingCount = Array.from(this.userFollowers.values()).filter(
+      f => f.followerId === userId
+    ).length;
+
+    let isFollowing: boolean | undefined = undefined;
+    if (viewerId) {
+      isFollowing = await this.isFollowing(viewerId, userId);
+    }
+
+    return {
+      ...user,
+      followerCount,
+      followingCount,
+      isFollowing,
+    };
+  }
+
+  async getFollowers(userId: string, limit = 50): Promise<User[]> {
+    const followerIds = Array.from(this.userFollowers.values())
+      .filter(f => f.followingId === userId)
+      .map(f => f.followerId)
+      .slice(0, limit);
+
+    return followerIds
+      .map(id => this.users.get(id))
+      .filter((u): u is User => u !== undefined);
+  }
+
+  async getFollowing(userId: string, limit = 50): Promise<User[]> {
+    const followingIds = Array.from(this.userFollowers.values())
+      .filter(f => f.followerId === userId)
+      .map(f => f.followingId)
+      .slice(0, limit);
+
+    return followingIds
+      .map(id => this.users.get(id))
+      .filter((u): u is User => u !== undefined);
+  }
+
+  async createNetworkNode(node: InsertNetworkNode): Promise<NetworkNode> {
+    const id = randomUUID();
+    const networkNode: NetworkNode = {
+      ...node,
+      id,
+      ipAddress: node.ipAddress ?? null,
+      userAgent: node.userAgent ?? null,
+      isActive: 'true',
+      lastHeartbeat: new Date(),
+      peerConnections: 0,
+      securityScore: 100,
+      createdAt: new Date(),
+    };
+    this.networkNodes.set(id, networkNode);
+    return networkNode;
+  }
+
+  async updateNodeHeartbeat(nodeId: string, peerConnections: number): Promise<NetworkNode | undefined> {
+    const node = this.networkNodes.get(nodeId);
+    if (!node) return undefined;
+
+    const updated: NetworkNode = {
+      ...node,
+      lastHeartbeat: new Date(),
+      peerConnections,
+    };
+    this.networkNodes.set(nodeId, updated);
+    return updated;
+  }
+
+  async deactivateNode(nodeId: string): Promise<boolean> {
+    const node = this.networkNodes.get(nodeId);
+    if (!node) return false;
+
+    const updated: NetworkNode = {
+      ...node,
+      isActive: 'false',
+    };
+    this.networkNodes.set(nodeId, updated);
+    return true;
+  }
+
+  async getUserNodes(userId: string): Promise<NetworkNode[]> {
+    return Array.from(this.networkNodes.values())
+      .filter(n => n.userId === userId);
+  }
+
+  async getNetworkStats(): Promise<NetworkStats> {
+    const nodes = Array.from(this.networkNodes.values());
+    const activeNodes = nodes.filter(n => n.isActive === 'true');
+
+    const totalNodes = nodes.length;
+    const totalActiveNodes = activeNodes.length;
+    const totalPeerConnections = activeNodes.reduce((sum, n) => sum + n.peerConnections, 0);
+    const avgSecurityScore = totalActiveNodes > 0
+      ? activeNodes.reduce((sum, n) => sum + n.securityScore, 0) / totalActiveNodes
+      : 0;
+
+    return {
+      totalNodes,
+      activeNodes: totalActiveNodes,
+      avgSecurityScore,
+      totalPeerConnections,
+    };
+  }
+
+  async getActiveNodes(limit = 100): Promise<NetworkNode[]> {
+    return Array.from(this.networkNodes.values())
+      .filter(n => n.isActive === 'true')
+      .sort((a, b) => b.lastHeartbeat.getTime() - a.lastHeartbeat.getTime())
+      .slice(0, limit);
   }
 }
 
@@ -395,6 +605,228 @@ class DbStorage implements IStorage {
         eq(userMessages.status, 'pending')
       ));
     return results.length;
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    const results = await this.db.select().from(users).where(eq(users.id, id));
+    return results[0];
+  }
+
+  async updateUserProfile(userId: string, updates: { displayName?: string; bio?: string; avatarUrl?: string }): Promise<User | undefined> {
+    const updateData: Partial<User> = {};
+    if (updates.displayName !== undefined) updateData.displayName = updates.displayName;
+    if (updates.bio !== undefined) updateData.bio = updates.bio;
+    if (updates.avatarUrl !== undefined) updateData.avatarUrl = updates.avatarUrl;
+
+    if (Object.keys(updateData).length === 0) {
+      return await this.getUserById(userId);
+    }
+
+    const results = await this.db.update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+    return results[0];
+  }
+
+  async updateUserOnlineStatus(userId: string, isOnline: boolean): Promise<User | undefined> {
+    const results = await this.db.update(users)
+      .set({
+        isOnline: isOnline ? 'true' : 'false',
+        lastSeen: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return results[0];
+  }
+
+  async searchUsers(query: string, limit = 20): Promise<User[]> {
+    const searchPattern = `%${query}%`;
+    const results = await this.db.select().from(users)
+      .where(
+        or(
+          ilike(users.displayName, searchPattern),
+          ilike(users.mobileNumber, searchPattern)
+        )
+      )
+      .limit(limit);
+    return results;
+  }
+
+  async followUser(followerId: string, followingId: string): Promise<UserFollower> {
+    if (followerId === followingId) {
+      throw new Error("Cannot follow yourself");
+    }
+
+    const existing = await this.db.select().from(userFollowers)
+      .where(and(
+        eq(userFollowers.followerId, followerId),
+        eq(userFollowers.followingId, followingId)
+      ));
+
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const results = await this.db.insert(userFollowers).values({
+      followerId,
+      followingId,
+    }).returning();
+    return results[0];
+  }
+
+  async unfollowUser(followerId: string, followingId: string): Promise<boolean> {
+    const results = await this.db.delete(userFollowers)
+      .where(and(
+        eq(userFollowers.followerId, followerId),
+        eq(userFollowers.followingId, followingId)
+      ))
+      .returning();
+    return results.length > 0;
+  }
+
+  async isFollowing(followerId: string, followingId: string): Promise<boolean> {
+    const results = await this.db.select().from(userFollowers)
+      .where(and(
+        eq(userFollowers.followerId, followerId),
+        eq(userFollowers.followingId, followingId)
+      ));
+    return results.length > 0;
+  }
+
+  async getUserProfile(userId: string, viewerId?: string): Promise<UserProfile | undefined> {
+    const userResult = await this.db.select().from(users).where(eq(users.id, userId));
+    const user = userResult[0];
+    if (!user) return undefined;
+
+    const followerCountResult = await this.db
+      .select({ count: count() })
+      .from(userFollowers)
+      .where(eq(userFollowers.followingId, userId));
+    const followerCount = followerCountResult[0]?.count || 0;
+
+    const followingCountResult = await this.db
+      .select({ count: count() })
+      .from(userFollowers)
+      .where(eq(userFollowers.followerId, userId));
+    const followingCount = followingCountResult[0]?.count || 0;
+
+    let isFollowing: boolean | undefined = undefined;
+    if (viewerId) {
+      isFollowing = await this.isFollowing(viewerId, userId);
+    }
+
+    return {
+      ...user,
+      followerCount: Number(followerCount),
+      followingCount: Number(followingCount),
+      isFollowing,
+    };
+  }
+
+  async getFollowers(userId: string, limit = 50): Promise<User[]> {
+    const results = await this.db
+      .select({
+        id: users.id,
+        countryCode: users.countryCode,
+        mobileNumber: users.mobileNumber,
+        isVerified: users.isVerified,
+        verificationCode: users.verificationCode,
+        verificationCodeExpiry: users.verificationCodeExpiry,
+        latitude: users.latitude,
+        longitude: users.longitude,
+        displayName: users.displayName,
+        bio: users.bio,
+        avatarUrl: users.avatarUrl,
+        isOnline: users.isOnline,
+        lastSeen: users.lastSeen,
+        createdAt: users.createdAt,
+      })
+      .from(userFollowers)
+      .innerJoin(users, eq(userFollowers.followerId, users.id))
+      .where(eq(userFollowers.followingId, userId))
+      .limit(limit);
+    return results;
+  }
+
+  async getFollowing(userId: string, limit = 50): Promise<User[]> {
+    const results = await this.db
+      .select({
+        id: users.id,
+        countryCode: users.countryCode,
+        mobileNumber: users.mobileNumber,
+        isVerified: users.isVerified,
+        verificationCode: users.verificationCode,
+        verificationCodeExpiry: users.verificationCodeExpiry,
+        latitude: users.latitude,
+        longitude: users.longitude,
+        displayName: users.displayName,
+        bio: users.bio,
+        avatarUrl: users.avatarUrl,
+        isOnline: users.isOnline,
+        lastSeen: users.lastSeen,
+        createdAt: users.createdAt,
+      })
+      .from(userFollowers)
+      .innerJoin(users, eq(userFollowers.followingId, users.id))
+      .where(eq(userFollowers.followerId, userId))
+      .limit(limit);
+    return results;
+  }
+
+  async createNetworkNode(node: InsertNetworkNode): Promise<NetworkNode> {
+    const results = await this.db.insert(networkNodes).values(node).returning();
+    return results[0];
+  }
+
+  async updateNodeHeartbeat(nodeId: string, peerConnections: number): Promise<NetworkNode | undefined> {
+    const results = await this.db.update(networkNodes)
+      .set({
+        lastHeartbeat: new Date(),
+        peerConnections,
+      })
+      .where(eq(networkNodes.id, nodeId))
+      .returning();
+    return results[0];
+  }
+
+  async deactivateNode(nodeId: string): Promise<boolean> {
+    const results = await this.db.update(networkNodes)
+      .set({ isActive: 'false' })
+      .where(eq(networkNodes.id, nodeId))
+      .returning();
+    return results.length > 0;
+  }
+
+  async getUserNodes(userId: string): Promise<NetworkNode[]> {
+    return await this.db.select().from(networkNodes)
+      .where(eq(networkNodes.userId, userId));
+  }
+
+  async getNetworkStats(): Promise<NetworkStats> {
+    const allNodes = await this.db.select().from(networkNodes);
+    const activeNodes = allNodes.filter(n => n.isActive === 'true');
+
+    const totalNodes = allNodes.length;
+    const totalActiveNodes = activeNodes.length;
+    const totalPeerConnections = activeNodes.reduce((sum, n) => sum + n.peerConnections, 0);
+    const avgSecurityScore = totalActiveNodes > 0
+      ? activeNodes.reduce((sum, n) => sum + n.securityScore, 0) / totalActiveNodes
+      : 0;
+
+    return {
+      totalNodes,
+      activeNodes: totalActiveNodes,
+      avgSecurityScore,
+      totalPeerConnections,
+    };
+  }
+
+  async getActiveNodes(limit = 100): Promise<NetworkNode[]> {
+    return await this.db.select().from(networkNodes)
+      .where(eq(networkNodes.isActive, 'true'))
+      .orderBy(desc(networkNodes.lastHeartbeat))
+      .limit(limit);
   }
 }
 

@@ -9,6 +9,8 @@ import { ProtectedRoute } from "@/components/protected-route";
 import Home from "@/pages/home";
 import Scanner from "@/pages/scanner";
 import Messages from "@/pages/messages";
+import Profile from "@/pages/profile";
+import Discover from "@/pages/discover";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -22,6 +24,12 @@ function Router() {
       </Route>
       <Route path="/messages">
         {() => <ProtectedRoute component={Messages} />}
+      </Route>
+      <Route path="/profile/:userId">
+        {() => <ProtectedRoute component={Profile} />}
+      </Route>
+      <Route path="/discover">
+        {() => <ProtectedRoute component={Discover} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

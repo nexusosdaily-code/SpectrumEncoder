@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Radio, Camera, Sparkles, LogOut, User, Mail } from "lucide-react";
+import { Radio, Camera, Sparkles, LogOut, User, Mail, Users, UserCircle } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -93,26 +93,50 @@ export function Header() {
             </Button>
           </Link>
           {authData?.user && (
-            <Link href="/messages">
-              <Button
-                variant={location === "/messages" ? "default" : "ghost"}
-                size="sm"
-                className="gap-2 relative"
-                data-testid="nav-messages"
-              >
-                <Mail className="h-4 w-4" />
-                Messages
-                {unreadData && unreadData.count > 0 && (
-                  <Badge 
-                    variant="destructive" 
-                    className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 px-1"
-                    data-testid="badge-unread-count"
-                  >
-                    {unreadData.count}
-                  </Badge>
-                )}
-              </Button>
-            </Link>
+            <>
+              <Link href="/messages">
+                <Button
+                  variant={location === "/messages" ? "default" : "ghost"}
+                  size="sm"
+                  className="gap-2 relative"
+                  data-testid="nav-messages"
+                >
+                  <Mail className="h-4 w-4" />
+                  Messages
+                  {unreadData && unreadData.count > 0 && (
+                    <Badge 
+                      variant="destructive" 
+                      className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 px-1"
+                      data-testid="badge-unread-count"
+                    >
+                      {unreadData.count}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
+              <Link href="/discover">
+                <Button
+                  variant={location === "/discover" ? "default" : "ghost"}
+                  size="sm"
+                  className="gap-2"
+                  data-testid="nav-discover"
+                >
+                  <Users className="h-4 w-4" />
+                  Discover
+                </Button>
+              </Link>
+              <Link href={`/profile/${authData.user.id}`}>
+                <Button
+                  variant={location.startsWith("/profile") ? "default" : "ghost"}
+                  size="sm"
+                  className="gap-2"
+                  data-testid="nav-profile"
+                >
+                  <UserCircle className="h-4 w-4" />
+                  Profile
+                </Button>
+              </Link>
+            </>
           )}
         </nav>
         <Separator orientation="vertical" className="h-6" />

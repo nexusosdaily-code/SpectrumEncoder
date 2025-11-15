@@ -422,6 +422,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User Profile Routes
+  
+  // Get user profile by ID
+  app.get("/api/profile/:userId", async (req, res) => {
+    try {
+      const viewerId = req.session?.userId;
+      const profile = await storage.getUserProfile(req.params.userId, viewerId);
+      
+      if (!profile) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      res.json(profile);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get user profile" });
+    }
+  });
+
+  // Update current user's profile
+  app.patch("/api/profile", async (req, res) => {
+    try {
+      if (!req.session || !req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const updateSchema = z.object({
+        displayName: z.string().max(100).optional(),
+        bio: z.string().max(500).optional(),
+        avatarUrl: z.string().url().optional(),
+      });
+
+      const updates = updateSchema.parse(req.body);
+      const user = await storage.updateUserProfile(req.session.userId, updates);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      res.json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid profile data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // Search users
+  app.get("/api/users/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      if (!query || query.trim().length < 2) {
+        return res.status(400).json({ error: "Search query must be at least 2 characters" });
+      }
+      
+      const users = await storage.searchUsers(query, limit);
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search users" });
+    }
+  });
+
+  // Follow/Unfollow Routes
+
+  // Follow a user
+  app.post("/api/follow/:userId", async (req, res) => {
+    try {
+      if (!req.session || !req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      if (req.session.userId === req.params.userId) {
+        return res.status(400).json({ error: "Cannot follow yourself" });
+      }
+
+      const relationship = await storage.followUser(req.session.userId, req.params.userId);
+      res.json(relationship);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to follow user" });
+    }
+  });
+
+  // Unfollow a user
+  app.delete("/api/follow/:userId", async (req, res) => {
+    try {
+      if (!req.session || !req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const success = await storage.unfollowUser(req.session.userId, req.params.userId);
+      
+      if (!success) {
+        return res.status(404).json({ error: "Follow relationship not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to unfollow user" });
+    }
+  });
+
+  // Get user's followers
+  app.get("/api/users/:userId/followers", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const followers = await storage.getFollowers(req.params.userId, limit);
+      res.json(followers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get followers" });
+    }
+  });
+
+  // Get users that this user follows
+  app.get("/api/users/:userId/following", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const following = await storage.getFollowing(req.params.userId, limit);
+      res.json(following);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get following" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
