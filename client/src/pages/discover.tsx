@@ -13,7 +13,7 @@ export default function Discover() {
 
   // Search users
   const { data: searchResults = [] } = useQuery<User[]>({
-    queryKey: ["/api/users/search", { q: searchQuery }],
+    queryKey: [`/api/users/search?q=${encodeURIComponent(searchQuery)}`],
     enabled: searchQuery.trim().length >= 2,
   });
 

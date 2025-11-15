@@ -44,6 +44,42 @@ Preferred communication style: Simple, everyday language.
 - `GET /api/messaging/sent` - View sent messages
 - `PATCH /api/messaging/:id/read` - Mark message as read
 - `GET /api/messaging/unread-count` - Get unread message count
+- `GET /api/profile/:userId` - Get user profile with follower/following counts
+- `PATCH /api/profile` - Update own profile (displayName, bio, avatarUrl)
+- `POST /api/follow/:userId` - Follow a user (authenticated)
+- `DELETE /api/follow/:userId` - Unfollow a user (authenticated)
+- `GET /api/users/:userId/followers` - Get list of user's followers
+- `GET /api/users/:userId/following` - Get list of users that user follows
+- `GET /api/users/search?q={query}` - Search users by displayName or mobileNumber
+
+### Social Features
+
+**User Profiles:**
+- Display name, bio (max 500 chars), avatar URL
+- Online status indicator
+- Follower/following counts with dedicated tabs
+- Editable profile for own user (displayName, bio, avatarUrl)
+- Follow/unfollow functionality for other users
+
+**User Discovery:**
+- Search by display name or mobile number (minimum 2 characters)
+- Results show avatar, name, mobile number, bio preview, and online status
+- Direct navigation to user profiles from search results
+
+**Database Schema:**
+- `users` table extended with: displayName, bio, avatarUrl, isOnline, lastSeen
+- `userFollowers` table: id (PK), followerId (FK), followingId (FK), createdAt
+- `networkNodes` table (for future distributed security): id, userId, ipAddress, publicKey, lastHeartbeat, securityScore, peerCount, uptime
+
+**Security:**
+- All follow/unfollow endpoints require authentication
+- Cannot follow yourself (server-side validation)
+- Profile view tracks whether current user is following the profile owner
+
+**Frontend Pages:**
+- `/profile/:userId` - User profile with edit mode for own profile
+- `/discover` - User search and discovery interface
+- Header navigation includes Profile and Discover links (authenticated users only)
 
 ### Core Encoding Algorithm
 
@@ -124,6 +160,32 @@ Supports an optional calibration sequence with reference wavelengths for adaptiv
 -   **Utilities:** date-fns, nanoid
 
 ## Recent Changes (November 2025)
+
+### Social Features: User Profiles & Follow System (November 15, 2025)
+
+**Implementation:** Complete user profile system with bio, avatar, follower/following relationships, and user discovery.
+
+**Features:**
+- **User Profiles**: Display name (100 chars), bio (500 chars), avatar URL, online status
+- **Follow System**: Authenticated follow/unfollow with relationship tracking
+- **User Discovery**: Search users by display name or mobile number (2+ chars required)
+- **Follower Lists**: Dedicated tabs showing followers and following with counts
+- **Profile Editing**: In-place editing for own profile with real-time updates
+
+**UI Pages:**
+- `/profile/:userId` - User profile page with edit mode, follow button, follower/following tabs
+- `/discover` - User search interface with real-time filtering
+- Header navigation updated with Profile and Discover links (auth required)
+
+**Database Schema:**
+- Extended `users` table: displayName, bio, avatarUrl, isOnline, lastSeen
+- New `userFollowers` table: followerId, followingId, createdAt (with FKs)
+- Prepared `networkNodes` table for future distributed security features
+
+**Security:**
+- All follow/unfollow endpoints require session authentication
+- Server-side validation prevents self-following
+- Profile queries include isFollowing flag for authenticated viewers
 
 ### SMS Verification & Location-Based Signup
 

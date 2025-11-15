@@ -30,11 +30,11 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState("");
 
   // Get current user
-  const { data: currentUser } = useQuery<User>({
+  const { data: authData } = useQuery<{ user: { id: string; mobileNumber: string } }>({
     queryKey: ["/api/auth/me"],
   });
 
-  const isOwnProfile = currentUser?.id === userId;
+  const isOwnProfile = authData?.user?.id === userId;
 
   // Get profile data
   const { data: profile, isLoading } = useQuery<UserProfile>({
@@ -200,7 +200,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              {!isOwnProfile && currentUser && (
+              {!isOwnProfile && authData?.user && (
                 <Button
                   onClick={() => followMutation.mutate({ 
                     userId: profile.id, 
