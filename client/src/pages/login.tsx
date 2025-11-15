@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Smartphone, MapPin } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Smartphone, MapPin, Info } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -184,34 +185,63 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background to-muted">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex items-center justify-center mb-4">
-            <div className="p-3 rounded-full bg-gradient-to-r from-cyan-500/20 to-fuchsia-500/20">
-              {step === "location" ? (
-                <MapPin className="h-8 w-8 text-cyan-400" />
-              ) : (
-                <Smartphone className="h-8 w-8 text-cyan-400" />
-              )}
+    <TooltipProvider>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background to-muted">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <div className="flex items-center justify-center mb-4">
+              <div className="p-3 rounded-full bg-gradient-to-r from-cyan-500/20 to-fuchsia-500/20">
+                {step === "location" ? (
+                  <MapPin className="h-8 w-8 text-cyan-400" />
+                ) : (
+                  <Smartphone className="h-8 w-8 text-cyan-400" />
+                )}
+              </div>
             </div>
-          </div>
-          <CardTitle className="text-2xl text-center bg-gradient-to-r from-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">
-            {step === "country" && "Sign Up"}
-            {step === "verification" && "Verify Mobile"}
-            {step === "location" && "Location Access"}
-          </CardTitle>
-          <CardDescription className="text-center">
-            {step === "country" && "Select your country and enter your mobile number"}
-            {step === "verification" && "Enter the 5-digit code sent to your phone"}
-            {step === "location" && "Grant location permission to complete signup"}
-          </CardDescription>
-        </CardHeader>
+            <div className="flex items-center justify-center gap-2">
+              <CardTitle className="text-2xl text-center bg-gradient-to-r from-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">
+                {step === "country" && "Sign Up"}
+                {step === "verification" && "Verify Mobile"}
+                {step === "location" && "Location Access"}
+              </CardTitle>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-help" data-testid="icon-info-step" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  {step === "country" && (
+                    <p>Complete the 3-step signup process: enter your mobile number, verify with SMS code, and optionally grant location access.</p>
+                  )}
+                  {step === "verification" && (
+                    <p>Your 5-digit verification code was sent via SMS and expires in 10 minutes. Check your messages or request a new code.</p>
+                  )}
+                  {step === "location" && (
+                    <p>Location verification helps confirm your registration area. This is optional and can be skipped or added later in settings.</p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <CardDescription className="text-center">
+              {step === "country" && "Select your country and enter your mobile number"}
+              {step === "verification" && "Enter the 5-digit code sent to your phone"}
+              {step === "location" && "Grant location permission to complete signup"}
+            </CardDescription>
+          </CardHeader>
         <CardContent>
           {step === "country" && (
             <form onSubmit={handleCountrySubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="country-select">Country</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="country-select">Country</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-help" data-testid="icon-info-country" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>Select your country to apply the correct international dialing code to your mobile number.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Select value={countryCode} onValueChange={setCountryCode}>
                   <SelectTrigger id="country-select" data-testid="select-country">
                     <SelectValue placeholder="Select country" />
@@ -231,7 +261,17 @@ export default function Login() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="mobile-number">Mobile Number</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="mobile-number">Mobile Number</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-help" data-testid="icon-info-mobile" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>Enter your mobile number without the country code. Only digits are accepted. You'll receive a 5-digit SMS verification code.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <div className="flex gap-2">
                   <div className="flex items-center px-3 border rounded-md bg-muted min-w-16">
                     <span className="text-sm font-medium">{countryCode}</span>
@@ -266,7 +306,17 @@ export default function Login() {
           {step === "verification" && (
             <form onSubmit={handleVerificationSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="verification-code">Verification Code</Label>
+                <div className="flex items-center justify-center gap-2">
+                  <Label htmlFor="verification-code">Verification Code</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-help" data-testid="icon-info-verification" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>Enter the 5-digit code sent to your phone. The code expires in 10 minutes. Use "Resend Code" if you didn't receive it.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Input
                   id="verification-code"
                   type="text"
@@ -341,5 +391,6 @@ export default function Login() {
         </CardContent>
       </Card>
     </div>
+    </TooltipProvider>
   );
 }
