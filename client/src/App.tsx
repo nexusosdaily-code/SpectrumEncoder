@@ -8,6 +8,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { ProtectedRoute } from "@/components/protected-route";
 import Home from "@/pages/home";
 import Scanner from "@/pages/scanner";
+import Messages from "@/pages/messages";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -18,6 +19,9 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/scanner">
         {() => <ProtectedRoute component={Scanner} />}
+      </Route>
+      <Route path="/messages">
+        {() => <ProtectedRoute component={Messages} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

@@ -53,3 +53,22 @@ export const insertUserSchema = createInsertSchema(users).omit({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// User messages table for in-app messaging
+export const userMessages = pgTable("user_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  senderId: varchar("sender_id").notNull().references(() => users.id),
+  recipientMobileNumber: varchar("recipient_mobile_number", { length: 20 }).notNull(),
+  messageContent: text("message_content").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default('pending'), // 'pending' or 'read'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUserMessageSchema = createInsertSchema(userMessages).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+});
+
+export type InsertUserMessage = z.infer<typeof insertUserMessageSchema>;
+export type UserMessage = typeof userMessages.$inferSelect;

@@ -84,19 +84,21 @@ export default function Home() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      let res;
       if (loadedMessageId) {
-        return await apiRequest("PATCH", `/api/messages/${loadedMessageId}`, {
+        res = await apiRequest("PATCH", `/api/messages/${loadedMessageId}`, {
           message,
           tsMs,
           tgMs,
         });
       } else {
-        return await apiRequest("POST", "/api/messages", {
+        res = await apiRequest("POST", "/api/messages", {
           message,
           tsMs,
           tgMs,
         });
       }
+      return await res.json();
     },
     onSuccess: (data: SavedMessage) => {
       queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
