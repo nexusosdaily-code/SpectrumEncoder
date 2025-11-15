@@ -65,9 +65,18 @@ Supports an optional calibration sequence with reference wavelengths for adaptiv
 
 ### In-App Messaging System
 
-**Purpose:** Allows authenticated users to send and receive text messages to each other using mobile numbers, with real-time notification alerts.
+**Purpose:** Allows authenticated users to send and receive text messages to each other using mobile numbers, with real-time notification alerts. Messages are encoded using wavelength format before transmission and decoded for display.
 
-**Database Schema:** `user_messages` table with senderId (FK to users), recipientMobileNumber, messageContent, status (pending/read), createdAt.
+**Database Schema:** `user_messages` table with senderId (FK to users), recipientMobileNumber, messageContent (stores wavelength format), status (pending/read), createdAt.
+
+**Wavelength Encoding Integration:**
+- **Encoding on Send**: Text messages are converted to wavelength numbers before storage
+- **Character Support**: Letters (A-Z: 380-740nm), Numbers (0-9: 750-795nm), Punctuation (800-895nm)
+- **Word Preservation**: Tab separators maintain word boundaries in encoded format
+- **Decoding on Display**: Wavelength format automatically decoded to readable text
+- **Dual Display**: UI shows both raw wavelength format and decoded text
+- **Example**: "HELLO WORLD" → "485 470 625 625 590[TAB]700 590 610 625 440"
+- **Performance**: Cached reverse lookup map for efficient decoding
 
 **Features:**
 - Send messages to any mobile number (numeric validation: digits only, optional + prefix)
@@ -77,6 +86,7 @@ Supports an optional calibration sequence with reference wavelengths for adaptiv
 - Unread message count badge in header navigation
 - Polling-based real-time updates (15s for inbox/unread, 30s for sent messages)
 - Pagination support (limit 50 per page with hasMore indicator)
+- Extended character support (letters, numbers, common punctuation)
 
 **Security:** 
 - All messaging endpoints require authentication via session
@@ -86,7 +96,10 @@ Supports an optional calibration sequence with reference wavelengths for adaptiv
 **UI Components:**
 - Messages page (/messages) with Inbox/Sent tabs
 - Compose form with recipient mobile input and message textarea
-- Message cards showing status (pending/read), sender/recipient, content, timestamp
+- Message cards showing:
+  - Status (pending/read), sender/recipient, timestamp
+  - Wavelength Format display (monospace font, gray background)
+  - Decoded Message display (readable text)
 - Real-time unread count badge on Messages navigation link
 
 ### Styling System
