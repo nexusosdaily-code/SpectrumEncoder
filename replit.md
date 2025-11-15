@@ -32,7 +32,11 @@ Preferred communication style: Simple, everyday language.
 - `POST /api/messages`
 - `PATCH /api/messages/:id`
 - `DELETE /api/messages/:id`
-- `POST /api/auth/login` - Mobile number authentication
+- `POST /api/auth/register` - Register with country code and mobile number
+- `POST /api/auth/send-verification` - Send 5-digit SMS verification code
+- `POST /api/auth/verify-code` - Verify SMS code and activate account
+- `POST /api/auth/update-location` - Update user location after permission grant
+- `POST /api/auth/login` - Mobile number authentication (deprecated - now uses verification flow)
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
 - `POST /api/messaging/send` - Send message to another user

@@ -22,6 +22,9 @@ export interface IStorage {
   // User operations
   getUserByMobileNumber(mobileNumber: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserVerificationCode(mobileNumber: string, code: string, expiry: Date): Promise<User | undefined>;
+  verifyUserCode(mobileNumber: string, code: string): Promise<User | undefined>;
+  updateUserLocation(mobileNumber: string, latitude: string, longitude: string): Promise<User | undefined>;
   
   // Messaging operations
   sendMessage(senderId: string, recipientMobileNumber: string, messageContent: string): Promise<UserMessage>;
@@ -76,9 +79,70 @@ class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id, createdAt: new Date() };
+    const user: User = { 
+      ...insertUser, 
+      id, 
+      isVerified: 'false',
+      verificationCode: insertUser.verificationCode ?? null,
+      verificationCodeExpiry: insertUser.verificationCodeExpiry ?? null,
+      latitude: insertUser.latitude ?? null,
+      longitude: insertUser.longitude ?? null,
+      createdAt: new Date() 
+    };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUserVerificationCode(mobileNumber: string, code: string, expiry: Date): Promise<User | undefined> {
+    const user = Array.from(this.users.values()).find(u => u.mobileNumber === mobileNumber);
+    if (!user) return undefined;
+    
+    const updated: User = {
+      ...user,
+      verificationCode: code,
+      verificationCodeExpiry: expiry,
+    };
+    this.users.set(user.id, updated);
+    return updated;
+  }
+
+  async verifyUserCode(mobileNumber: string, code: string): Promise<User | undefined> {
+    const user = Array.from(this.users.values()).find(u => u.mobileNumber === mobileNumber);
+    if (!user || !user.verificationCode || !user.verificationCodeExpiry) {
+      return undefined;
+    }
+
+    // Check if code matches and hasn't expired
+    if (user.verificationCode !== code) {
+      return undefined;
+    }
+
+    if (new Date() > user.verificationCodeExpiry) {
+      return undefined;
+    }
+
+    // Mark user as verified and clear verification code
+    const updated: User = {
+      ...user,
+      isVerified: 'true',
+      verificationCode: null,
+      verificationCodeExpiry: null,
+    };
+    this.users.set(user.id, updated);
+    return updated;
+  }
+
+  async updateUserLocation(mobileNumber: string, latitude: string, longitude: string): Promise<User | undefined> {
+    const user = Array.from(this.users.values()).find(u => u.mobileNumber === mobileNumber);
+    if (!user) return undefined;
+    
+    const updated: User = {
+      ...user,
+      latitude,
+      longitude,
+    };
+    this.users.set(user.id, updated);
+    return updated;
   }
 
   async sendMessage(senderId: string, recipientMobileNumber: string, messageContent: string): Promise<UserMessage> {
@@ -182,6 +246,57 @@ class DbStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const results = await this.db.insert(users).values(insertUser).returning();
+    return results[0];
+  }
+
+  async updateUserVerificationCode(mobileNumber: string, code: string, expiry: Date): Promise<User | undefined> {
+    const results = await this.db.update(users)
+      .set({
+        verificationCode: code,
+        verificationCodeExpiry: expiry,
+      })
+      .where(eq(users.mobileNumber, mobileNumber))
+      .returning();
+    return results[0];
+  }
+
+  async verifyUserCode(mobileNumber: string, code: string): Promise<User | undefined> {
+    const userResults = await this.db.select().from(users).where(eq(users.mobileNumber, mobileNumber));
+    const user = userResults[0];
+    
+    if (!user || !user.verificationCode || !user.verificationCodeExpiry) {
+      return undefined;
+    }
+
+    // Check if code matches and hasn't expired
+    if (user.verificationCode !== code) {
+      return undefined;
+    }
+
+    if (new Date() > user.verificationCodeExpiry) {
+      return undefined;
+    }
+
+    // Mark user as verified and clear verification code
+    const results = await this.db.update(users)
+      .set({
+        isVerified: 'true',
+        verificationCode: null,
+        verificationCodeExpiry: null,
+      })
+      .where(eq(users.mobileNumber, mobileNumber))
+      .returning();
+    return results[0];
+  }
+
+  async updateUserLocation(mobileNumber: string, latitude: string, longitude: string): Promise<User | undefined> {
+    const results = await this.db.update(users)
+      .set({
+        latitude,
+        longitude,
+      })
+      .where(eq(users.mobileNumber, mobileNumber))
+      .returning();
     return results[0];
   }
 

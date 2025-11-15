@@ -42,13 +42,20 @@ export type SavedMessage = typeof savedMessages.$inferSelect;
 // Users table for mobile number authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  countryCode: varchar("country_code", { length: 5 }).notNull(), // e.g., "+1", "+44", "+91"
   mobileNumber: varchar("mobile_number", { length: 20 }).notNull().unique(),
+  isVerified: varchar("is_verified", { length: 10 }).notNull().default('false'), // 'true' or 'false'
+  verificationCode: varchar("verification_code", { length: 5 }), // 5-digit code
+  verificationCodeExpiry: timestamp("verification_code_expiry"),
+  latitude: text("latitude"), // User location latitude
+  longitude: text("longitude"), // User location longitude
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  isVerified: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
