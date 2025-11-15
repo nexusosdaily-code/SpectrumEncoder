@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Radio, Camera, Sparkles, LogOut, User, Mail, Users, UserCircle, Info } from "lucide-react";
+import { Radio, Camera, Sparkles, LogOut, User, Mail, Users, UserCircle } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -90,17 +90,6 @@ export function Header() {
             >
               <Camera className="h-4 w-4" />
               Scanner
-            </Button>
-          </Link>
-          <Link href="/info">
-            <Button
-              variant={location === "/info" ? "default" : "ghost"}
-              size="sm"
-              className="gap-2"
-              data-testid="nav-info"
-            >
-              <Info className="h-4 w-4" />
-              Info
             </Button>
           </Link>
           {authData?.user && (

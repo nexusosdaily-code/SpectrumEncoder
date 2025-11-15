@@ -11,7 +11,6 @@ import Scanner from "@/pages/scanner";
 import Messages from "@/pages/messages";
 import Profile from "@/pages/profile";
 import Discover from "@/pages/discover";
-import Info from "@/pages/info";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -32,7 +31,6 @@ function Router() {
       <Route path="/discover">
         {() => <ProtectedRoute component={Discover} />}
       </Route>
-      <Route path="/info" component={Info} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -69,51 +69,12 @@ Preferred communication style: Simple, everyday language.
 **Database Schema:**
 - `users` table extended with: displayName, bio, avatarUrl, isOnline, lastSeen
 - `userFollowers` table: id (PK), followerId (FK), followingId (FK), createdAt
-- `networkNodes` table: id, userId, ipAddress, publicKey, lastHeartbeat, securityScore, peerCount, uptime
-- `dagVertices` table: vertexHash (unique), nodeId, tip references, depth, cumulativeWeight, payloadType, payloadHash, payloadData, engagementProof, signature
+- `networkNodes` table (for future distributed security): id, userId, ipAddress, publicKey, lastHeartbeat, securityScore, peerCount, uptime
 
 **Security:**
 - All follow/unfollow endpoints require authentication
 - Cannot follow yourself (server-side validation)
 - Profile view tracks whether current user is following the profile owner
-
-### Decentralized P2P DAG Network (Production-Ready)
-
-**Architecture:** Hybrid P2P overlay using libp2p/WebRTC with IOTA Tangle-inspired DAG consensus for tamper-proof message verification and proof-of-engagement ledger.
-
-**Cryptographic Security:**
-- **Ed25519 Signatures**: WebCrypto-based key generation, signing, and verification (shared/crypto.ts)
-- **Key Storage**: Secure IndexedDB storage with XOR obfuscation using browser fingerprint (client/src/lib/keyStore.ts)
-- **Replay Protection**: NonceTracker with 5-minute expiration window and automatic cleanup
-- **Hash Chain Integrity**: Triple verification (payload hash → vertex hash → signature)
-
-**DAG Consensus Algorithm:**
-- **Tip Selection**: IOTA Tangle-style MCMC weighted random walk with exponential bias (alpha=0.001)
-- **Cumulative Weight**: O(n) calculation using topological ordering with approvers index
-- **Validation**: Cycle detection (DFS), conflict detection, depth ordering, anchoring rules
-- **Pruning**: Remove vertices older than 7 days (except anchored)
-
-**Verification Chain (all vertices MUST pass):**
-1. **Signature Presence**: Reject unsigned vertices immediately
-2. **Payload Integrity**: Recompute payload hash, verify match with vertex.payloadHash
-3. **Vertex Hash Integrity**: Recalculate vertex hash from tips/payload/nodeId/timestamp
-4. **Signature Verification**: Ed25519 verification over computed vertex hash
-5. **Nonce Check**: Reject replayed nonces (5-minute window)
-
-**Attack Resistance:**
-- ❌ Payload Tampering: Blocked by payload hash verification
-- ❌ Hash Tampering: Blocked by signature verification  
-- ❌ Signature Forgery: Blocked by Ed25519 cryptography
-- ❌ Replay Attacks: Blocked by nonce tracking
-- ❌ Man-in-Middle: Any modification breaks hash chain
-
-**Implementation Files:**
-- shared/crypto.ts - Ed25519 signing, nonce tracking, engagement proofs
-- shared/dag.ts - DAG validation, tip selection, VertexBuilder
-- client/src/lib/keyStore.ts - Secure key storage with IndexedDB
-- client/src/lib/dagStorage.ts - Local DAG persistence and weight calculation
-- client/src/lib/p2pNetwork.ts - libp2p client with full verification chain
-- server/p2p-bootstrap.ts - Bootstrap node for peer discovery
 
 **Frontend Pages:**
 - `/profile/:userId` - User profile with edit mode for own profile
