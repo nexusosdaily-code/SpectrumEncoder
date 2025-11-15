@@ -14,6 +14,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { UserMessage } from "@shared/schema";
+import { textToWavelengthFormat, wavelengthFormatToText } from "@shared/messageEncoding";
 
 interface MessageWithSender extends UserMessage {
   senderMobileNumber?: string;
@@ -94,9 +95,12 @@ export default function Messages() {
       return;
     }
 
+    // Encode the message text to wavelength format before sending
+    const encodedMessage = textToWavelengthFormat(messageContent);
+
     sendMutation.mutate({
       recipientMobileNumber: recipientMobile,
-      messageContent,
+      messageContent: encodedMessage,
     });
   };
 
@@ -169,7 +173,14 @@ export default function Messages() {
                                       {msg.status}
                                     </Badge>
                                   </div>
-                                  <p className="text-sm mb-2">{msg.messageContent}</p>
+                                  <div className="space-y-2 mb-2">
+                                    <p className="text-sm font-medium text-muted-foreground">Wavelength Format:</p>
+                                    <p className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto">
+                                      {msg.messageContent}
+                                    </p>
+                                    <p className="text-sm font-medium text-muted-foreground">Decoded Message:</p>
+                                    <p className="text-sm">{wavelengthFormatToText(msg.messageContent)}</p>
+                                  </div>
                                   <p className="text-xs text-muted-foreground">
                                     {format(new Date(msg.createdAt), 'PPp')}
                                   </p>
@@ -212,7 +223,14 @@ export default function Messages() {
                                     <span className="font-medium text-sm">To: {msg.recipientMobileNumber}</span>
                                     <Badge variant="outline">{msg.status}</Badge>
                                   </div>
-                                  <p className="text-sm mb-2">{msg.messageContent}</p>
+                                  <div className="space-y-2 mb-2">
+                                    <p className="text-sm font-medium text-muted-foreground">Wavelength Format:</p>
+                                    <p className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto">
+                                      {msg.messageContent}
+                                    </p>
+                                    <p className="text-sm font-medium text-muted-foreground">Decoded Message:</p>
+                                    <p className="text-sm">{wavelengthFormatToText(msg.messageContent)}</p>
+                                  </div>
                                   <p className="text-xs text-muted-foreground">
                                     {format(new Date(msg.createdAt), 'PPp')}
                                   </p>
