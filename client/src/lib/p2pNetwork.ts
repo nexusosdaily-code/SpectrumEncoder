@@ -232,50 +232,53 @@ export class P2PNetwork {
           }
         }
         
-        // Verify vertex signature AND hash integrity
-        if (vertex.signature) {
-          // Verify payload integrity first
-          if (!vertex.payloadData) {
-            console.warn('[P2P] Missing payload data from peer:', fromPeerId);
-            return;
-          }
-          
-          let payload: VertexPayload;
-          try {
-            payload = JSON.parse(vertex.payloadData);
-          } catch (error) {
-            console.error('[P2P] Failed to parse payload data:', error);
-            return;
-          }
-          
-          // Recompute payload hash and verify it matches
-          const computedPayloadHash = await DAGUtils.calculatePayloadHash(payload);
-          if (computedPayloadHash !== vertex.payloadHash) {
-            console.warn('[P2P] Payload hash mismatch - payload tampering detected from peer:', fromPeerId);
-            return;
-          }
-          
-          // Recalculate the vertex hash using the payload timestamp
-          const computedVertexHash = DAGUtils.calculateVertexHash({
-            tipReference1: vertex.tipReference1,
-            tipReference2: vertex.tipReference2,
-            payloadHash: vertex.payloadHash,
-            nodeId: vertex.nodeId,
-            timestamp: payload.timestamp,
-          });
-          
-          // Verify signature AND that it signed the correct hash
-          const signatureValid = await DAGUtils.verifyVertexSignature(vertex.signature, computedVertexHash);
-          if (!signatureValid) {
-            console.warn('[P2P] Invalid vertex signature or hash mismatch from peer:', fromPeerId);
-            return;
-          }
-          
-          // Verify claimed vertex hash matches what we computed
-          if (vertex.vertexHash !== computedVertexHash) {
-            console.warn('[P2P] Vertex hash mismatch from peer:', fromPeerId);
-            return;
-          }
+        // Enforce signature requirement - all DAG vertices MUST be signed
+        if (!vertex.signature) {
+          console.warn('[P2P] Unsigned vertex rejected from peer:', fromPeerId);
+          return;
+        }
+        
+        // Verify payload integrity first
+        if (!vertex.payloadData) {
+          console.warn('[P2P] Missing payload data from peer:', fromPeerId);
+          return;
+        }
+        
+        let payload: VertexPayload;
+        try {
+          payload = JSON.parse(vertex.payloadData);
+        } catch (error) {
+          console.error('[P2P] Failed to parse payload data:', error);
+          return;
+        }
+        
+        // Recompute payload hash and verify it matches
+        const computedPayloadHash = await DAGUtils.calculatePayloadHash(payload);
+        if (computedPayloadHash !== vertex.payloadHash) {
+          console.warn('[P2P] Payload hash mismatch - payload tampering detected from peer:', fromPeerId);
+          return;
+        }
+        
+        // Recalculate the vertex hash using the payload timestamp
+        const computedVertexHash = DAGUtils.calculateVertexHash({
+          tipReference1: vertex.tipReference1,
+          tipReference2: vertex.tipReference2,
+          payloadHash: vertex.payloadHash,
+          nodeId: vertex.nodeId,
+          timestamp: payload.timestamp,
+        });
+        
+        // Verify signature AND that it signed the correct hash
+        const signatureValid = await DAGUtils.verifyVertexSignature(vertex.signature, computedVertexHash);
+        if (!signatureValid) {
+          console.warn('[P2P] Invalid vertex signature or hash mismatch from peer:', fromPeerId);
+          return;
+        }
+        
+        // Verify claimed vertex hash matches what we computed
+        if (vertex.vertexHash !== computedVertexHash) {
+          console.warn('[P2P] Vertex hash mismatch from peer:', fromPeerId);
+          return;
         }
       }
       
