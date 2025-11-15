@@ -1,6 +1,7 @@
 import { type SavedMessage, type InsertSavedMessage, savedMessages } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
+import { db } from "./db";
 
 export interface IStorage {
   getSavedMessages(): Promise<SavedMessage[]>;
@@ -47,12 +48,7 @@ class MemStorage implements IStorage {
 }
 
 class DbStorage implements IStorage {
-  private db: any;
-
-  constructor() {
-    const { db } = require("./db");
-    this.db = db;
-  }
+  private db = db;
 
   async getSavedMessages(): Promise<SavedMessage[]> {
     return await this.db.select().from(savedMessages);

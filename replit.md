@@ -10,6 +10,44 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 15, 2025 - Camera-Based Wavelength Scanner
+**Implemented complete camera scanning system for decoding visual signals from another device:**
+
+**Color Detection System:**
+- Perceptual LAB color space matching (RGB → XYZ → LAB transformation)
+- Delta E distance calculation for accurate color comparison
+- Precomputed LAB values for A-Z letter spectrum (SPECTRUM_LAB_MAP)
+- SOF/EOF/guard/preamble detection using RGB thresholds
+- 30x30px center area sampling from video feed for stability
+
+**Camera Scanner Component:**
+- WebRTC camera access with environment camera preference
+- RequestAnimationFrame-based real-time frame processing at 60fps
+- State machine: Preamble → SOF → Letters → EOF
+- Guard state flag system: `inGuardIntervalRef` set on black detection
+- Letter confirmation: Requires 2+ consecutive frames of same color (LETTER_THRESHOLD)
+- Repeated letter support: Guard flag allows same letter after guard interval
+- Live UI feedback: color indicator, detected letter, wavelength display, buffer status
+
+**Scanner Page:**
+- Full-page camera preview with WebRTC controls
+- Start/Stop scanning buttons with permission handling
+- Live color detection visualization with sample area indicator
+- Real-time decoded message display
+- Message history tracking
+- Navigation between Encoder and Scanner pages in header
+
+**Technical Implementation:**
+- Guard detection uses boolean flag (not frame counting) to handle 30ms intervals (~1-2 frames at 60fps)
+- Functional setState for status updates (no stale closures)
+- Wavelength data integrated from shared constants (380-740nm visible spectrum)
+- Fixed ESM import issue in DbStorage (replaced require() with import)
+
+**Design Rationale:**
+- LAB color space chosen over RGB-to-wavelength heuristics for perceptual accuracy
+- Guard state flag approach handles short guard intervals reliably
+- 2-frame threshold balances responsiveness with noise immunity
+
 ### November 15, 2025 - Saved Message Library Feature
 **Implemented persistent message storage with update capability:**
 - PostgreSQL database integration with automatic fallback to in-memory storage when DATABASE_URL is unavailable
