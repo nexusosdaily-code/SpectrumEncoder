@@ -1,9 +1,13 @@
-import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface EncoderSectionProps {
   message: string;
@@ -51,18 +55,25 @@ export function EncoderSection({
             <Sparkles className="h-4 w-4 mr-2" />
             Encode to Color Signal
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              onMessageChange("");
-              onClear?.();
-            }}
-            disabled={message.length === 0}
-            data-testid="button-clear-encoder"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  onMessageChange("");
+                  onClear?.();
+                }}
+                disabled={message.length === 0}
+                data-testid="button-clear-encoder"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Clear & start new message</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </Card>
