@@ -188,17 +188,24 @@ export class DAGStorage {
     await this.db.put(CHECKPOINT_STORE, checkpoint);
   }
 
+  /**
+   * Update cumulative weights for all vertices using optimized O(n) algorithm
+   */
   async updateCumulativeWeights(): Promise<void> {
     await this.init();
     if (!this.db) throw new Error('DB not initialized');
 
     const allVertices = await this.getAllVertices();
+    
+    // Use the new O(n) weight calculation algorithm
+    const weightMap = DAGUtils.recalculateAllWeights(allVertices);
+    
     const tx = this.db.transaction(VERTEX_STORE, 'readwrite');
     const store = tx.objectStore(VERTEX_STORE);
 
     for (const vertex of allVertices) {
-      const newWeight = DAGUtils.calculateCumulativeWeight(vertex, allVertices);
-      if (newWeight !== vertex.cumulativeWeight) {
+      const newWeight = weightMap.get(vertex.vertexHash);
+      if (newWeight !== undefined && newWeight !== vertex.cumulativeWeight) {
         vertex.cumulativeWeight = newWeight;
         await store.put(vertex);
       }

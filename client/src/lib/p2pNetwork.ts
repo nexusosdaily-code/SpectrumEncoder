@@ -9,12 +9,13 @@ import { bootstrap } from '@libp2p/bootstrap';
 import { dagStorage } from './dagStorage';
 import { DAGUtils, VertexBuilder, type VertexPayload } from '@/../../shared/dag';
 import type { DagVertex, NetworkNode } from '@/../../shared/schema';
+import { generateKeyPair, exportPrivateKey, importPrivateKey, type KeyPair } from '@/../../shared/crypto';
 
 export interface P2PConfig {
   bootstrapPeers: string[];
   topics: string[];
   nodeId: string;
-  privateKey: string;
+  keyPair: KeyPair;
 }
 
 export interface PeerStats {
@@ -239,10 +240,10 @@ export class P2PNetwork {
     const tips = await dagStorage.selectTips();
     
     const builder = new VertexBuilder(this.config.nodeId);
-    const insertVertex = builder
+    const insertVertex = await builder
       .withPayload(payload)
       .withTips(tips)
-      .build(this.config.privateKey);
+      .build(this.config.keyPair.privateKey, this.config.keyPair.publicKeyHex);
 
     const vertex: DagVertex = {
       ...insertVertex,
@@ -257,6 +258,42 @@ export class P2PNetwork {
     };
 
     return vertex;
+  }
+  
+  /**
+   * Generate or load cryptographic keys for the P2P node
+   */
+  static async generateKeys(): Promise<KeyPair> {
+    // Check if keys are stored in IndexedDB
+    try {
+      const stored = localStorage.getItem('p2p-keypair');
+      if (stored) {
+        const { publicKeyHex, privateKeyHex } = JSON.parse(stored);
+        const privateKey = await importPrivateKey(privateKeyHex);
+        const publicKeyBuffer = new Uint8Array(publicKeyHex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+        const publicKey = await crypto.subtle.importKey('raw', publicKeyBuffer, { name: 'Ed25519' }, true, ['verify']);
+        
+        return { publicKey, privateKey, publicKeyHex };
+      }
+    } catch (error) {
+      console.warn('[P2P] Failed to load stored keys, generating new ones:', error);
+    }
+    
+    // Generate new keys
+    const keyPair = await generateKeyPair();
+    const privateKeyHex = await exportPrivateKey(keyPair.privateKey);
+    
+    // Store for future use
+    try {
+      localStorage.setItem('p2p-keypair', JSON.stringify({
+        publicKeyHex: keyPair.publicKeyHex,
+        privateKeyHex,
+      }));
+    } catch (error) {
+      console.warn('[P2P] Failed to store keys:', error);
+    }
+    
+    return keyPair;
   }
 
   async relayMessage(messageData: any): Promise<DagVertex> {
