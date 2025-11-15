@@ -46,21 +46,29 @@ export function Header() {
   };
 
   return (
-    <div className="flex items-center justify-between flex-1">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between flex-1 relative">
+      {/* NEXUS-themed gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-transparent to-fuchsia-500/10 pointer-events-none" />
+      
+      {/* NEXUS-themed bottom border */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 via-fuchsia-500 to-cyan-500" />
+      
+      <div className="flex items-center gap-3 relative z-10">
         <img 
           src={nexusLogo} 
           alt="NEXUS Logo" 
-          className="h-12 w-12 rounded-md object-cover"
+          className="h-12 w-12 rounded-md object-cover ring-2 ring-cyan-500/50"
           data-testid="logo-nexus"
         />
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Visual Signal</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">
+            Visual Signal
+          </h1>
           <p className="text-xs text-muted-foreground -mt-1">Encoder/Decoder</p>
         </div>
       </div>
       
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 relative z-10">
         <nav className="flex items-center gap-1">
           <Link href="/">
             <Button
