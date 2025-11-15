@@ -27,14 +27,19 @@ Preferred communication style: Simple, everyday language.
 **Design Rationale:** Lightweight HTTP server, smart storage layer (PostgreSQL or in-memory), RESTful API for message CRUD operations. Lazy database initialization prevents crashes if a database isn't configured. Authentication via mobile number and session management.
 
 **API Endpoints:**
-- `GET /api/messages`
+- `GET /api/messages` - Saved encoded messages library
 - `GET /api/messages/:id`
 - `POST /api/messages`
 - `PATCH /api/messages/:id`
 - `DELETE /api/messages/:id`
-- `POST /api/auth/login`
+- `POST /api/auth/login` - Mobile number authentication
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
+- `POST /api/messaging/send` - Send message to another user
+- `GET /api/messaging/inbox` - Receive messages
+- `GET /api/messaging/sent` - View sent messages
+- `PATCH /api/messaging/:id/read` - Mark message as read
+- `GET /api/messaging/unread-count` - Get unread message count
 
 ### Core Encoding Algorithm
 
@@ -57,6 +62,32 @@ Preferred communication style: Simple, everyday language.
 Supports an optional calibration sequence with reference wavelengths for adaptive detection. Includes a fallback to color-only legacy mode if no calibration is detected.
 
 **Scanner Component:** WebRTC camera access, real-time frame processing at 60fps, state machine for signal detection, guard state flag system, letter confirmation (2+ consecutive frames), and live UI feedback.
+
+### In-App Messaging System
+
+**Purpose:** Allows authenticated users to send and receive text messages to each other using mobile numbers, with real-time notification alerts.
+
+**Database Schema:** `user_messages` table with senderId (FK to users), recipientMobileNumber, messageContent, status (pending/read), createdAt.
+
+**Features:**
+- Send messages to any mobile number (numeric validation: digits only, optional + prefix)
+- Inbox view with sender mobile numbers (joined from users table)
+- Sent messages view
+- Mark messages as read functionality with authorization checks
+- Unread message count badge in header navigation
+- Polling-based real-time updates (15s for inbox/unread, 30s for sent messages)
+- Pagination support (limit 50 per page with hasMore indicator)
+
+**Security:** 
+- All messaging endpoints require authentication via session
+- Mark-as-read verifies recipient authorization through storage-layer recipientMobileNumber matching
+- Mobile number validation on both client and server (regex: /^\+?[0-9]+$/)
+
+**UI Components:**
+- Messages page (/messages) with Inbox/Sent tabs
+- Compose form with recipient mobile input and message textarea
+- Message cards showing status (pending/read), sender/recipient, content, timestamp
+- Real-time unread count badge on Messages navigation link
 
 ### Styling System
 
