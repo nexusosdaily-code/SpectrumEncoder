@@ -120,5 +120,28 @@ Supports an optional calibration sequence with reference wavelengths for adaptiv
 -   **State & Data Management:** TanStack Query v5, React Hook Form, Zod, Drizzle ORM
 -   **Database:** PostgreSQL (via @neondatabase/serverless), Drizzle Kit, connect-pg-simple
 -   **Routing:** Wouter
--   **Authentication:** express-session
+-   **Authentication:** express-session, Twilio Programmable Messaging (for SMS verification)
 -   **Utilities:** date-fns, nanoid
+
+## Recent Changes (November 2025)
+
+### SMS Verification & Location-Based Signup
+
+**Implementation:** Country-based mobile signup with Twilio SMS verification and browser geolocation.
+
+**Features:**
+- **Country Selection**: 50+ international dialing codes from dropdown
+- **SMS Verification**: Twilio Programmable Messaging API sends custom 5-digit codes
+- **Location Verification**: HTML5 Geolocation API with permission handling
+- **Dev Mode Fallback**: Returns verification codes in response when Twilio unavailable
+
+**API Secrets Required:**
+- `TWILIO_ACCOUNT_SID`: Twilio account identifier
+- `TWILIO_AUTH_TOKEN`: Twilio authentication token
+- `TWILIO_PHONE_NUMBER`: Twilio phone number to send SMS from (or TWILIO_VERIFY_SERVICE_SID as fallback)
+
+**Database Schema Changes:**
+- Added `countryCode` (varchar), `isVerified`, `verificationCode`, `verificationCodeExpiry`, `latitude`, `longitude` to users table
+- Verification codes expire after 10 minutes
+
+**Note on Twilio Integration:** Using Programmable Messaging API (not Verify API) to support custom 5-digit codes. Verify Service SID can be used as fallback phone number if TWILIO_PHONE_NUMBER not set.

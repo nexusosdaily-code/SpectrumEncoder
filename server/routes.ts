@@ -5,11 +5,210 @@ import { insertSavedMessageSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import "./types"; // Import session type declarations
 
+// Twilio client setup
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
+
 // Mobile number validation schema
 const mobileNumberSchema = z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid mobile number format");
 
+// Generate random 5-digit code
+function generate5DigitCode(): string {
+  return Math.floor(10000 + Math.random() * 90000).toString();
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
+  
+  // Register user with country code and mobile number
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { countryCode, mobileNumber } = req.body;
+      
+      if (!countryCode || !mobileNumber) {
+        return res.status(400).json({ error: "Country code and mobile number are required" });
+      }
+      
+      const fullNumber = `${countryCode}${mobileNumber}`;
+      const validated = mobileNumberSchema.parse(fullNumber);
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByMobileNumber(validated);
+      if (existingUser) {
+        return res.status(400).json({ error: "User already exists with this mobile number" });
+      }
+      
+      // Create new user (not yet verified)
+      const user = await storage.createUser({ 
+        countryCode, 
+        mobileNumber: validated 
+      });
+      
+      res.status(201).json({ 
+        message: "User registered successfully. Please verify your mobile number.",
+        user: { id: user.id, mobileNumber: user.mobileNumber }
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid mobile number format" });
+      }
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  // Send verification code via SMS
+  app.post("/api/auth/send-verification", async (req, res) => {
+    try {
+      const { mobileNumber } = req.body;
+      const validated = mobileNumberSchema.parse(mobileNumber);
+      
+      // Check if user exists
+      const user = await storage.getUserByMobileNumber(validated);
+      if (!user) {
+        return res.status(404).json({ error: "User not found. Please register first." });
+      }
+      
+      // Generate 5-digit code
+      const code = generate5DigitCode();
+      const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      
+      // Store verification code
+      await storage.updateUserVerificationCode(validated, code, expiry);
+      
+      // Send SMS via Twilio Programmable Messaging (with fallback to dev mode)
+      let smsSent = false;
+      
+      if (accountSid && authToken) {
+        try {
+          // Use Programmable Messaging API to send custom verification code
+          const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || verifyServiceSid || "";
+          if (!twilioPhoneNumber) {
+            console.warn("No Twilio phone number configured, using dev mode");
+          } else {
+            const smsBody = `Your verification code is: ${code}. This code expires in 10 minutes.`;
+            
+            const params = new URLSearchParams();
+            params.append('To', validated);
+            params.append('From', twilioPhoneNumber);
+            params.append('Body', smsBody);
+            
+            const response = await fetch(
+              `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                  'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64')
+                },
+                body: params
+              }
+            );
+            
+            if (response.ok) {
+              smsSent = true;
+              const data = await response.json();
+              console.log(`SMS sent successfully to ${validated}, SID: ${data.sid}`);
+              res.json({ message: "Verification code sent successfully" });
+            } else {
+              const errorData = await response.json();
+              console.warn("Twilio error (falling back to dev mode):", errorData);
+              // Fall through to dev mode
+            }
+          }
+        } catch (twilioError) {
+          console.warn("Twilio API error (falling back to dev mode):", twilioError);
+          // Fall through to dev mode
+        }
+      }
+      
+      // Development mode / Twilio fallback - return code in response (for testing)
+      if (!smsSent) {
+        console.log(`[DEV MODE] Verification code for ${validated}: ${code}`);
+        res.json({ 
+          message: "Verification code generated (dev mode)", 
+          code // Only in dev mode
+        });
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid mobile number format" });
+      }
+      console.error("Send verification error:", error);
+      res.status(500).json({ error: "Failed to send verification code" });
+    }
+  });
+
+  // Verify code and activate account
+  app.post("/api/auth/verify-code", async (req, res) => {
+    try {
+      const { mobileNumber, code } = req.body;
+      
+      if (!mobileNumber || !code) {
+        return res.status(400).json({ error: "Mobile number and code are required" });
+      }
+      
+      const validated = mobileNumberSchema.parse(mobileNumber);
+      
+      // Verify the code
+      const user = await storage.verifyUserCode(validated, code);
+      
+      if (!user) {
+        return res.status(400).json({ error: "Invalid or expired verification code" });
+      }
+      
+      // Set session - user is now authenticated
+      req.session.userId = user.id;
+      req.session.mobileNumber = user.mobileNumber;
+      
+      res.json({ 
+        message: "Account verified successfully",
+        user: { id: user.id, mobileNumber: user.mobileNumber }
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid mobile number format" });
+      }
+      console.error("Verification error:", error);
+      res.status(500).json({ error: "Verification failed" });
+    }
+  });
+
+  // Update user location
+  app.post("/api/auth/update-location", async (req, res) => {
+    try {
+      if (!req.session || !req.session.mobileNumber) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const { latitude, longitude } = req.body;
+      
+      if (!latitude || !longitude) {
+        return res.status(400).json({ error: "Latitude and longitude are required" });
+      }
+      
+      const user = await storage.updateUserLocation(
+        req.session.mobileNumber,
+        latitude.toString(),
+        longitude.toString()
+      );
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      res.json({ 
+        message: "Location updated successfully",
+        location: { latitude, longitude }
+      });
+    } catch (error) {
+      console.error("Update location error:", error);
+      res.status(500).json({ error: "Failed to update location" });
+    }
+  });
+
+  // Legacy login route (deprecated - kept for backwards compatibility)
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { mobileNumber } = req.body;
@@ -20,7 +219,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create new user if doesn't exist
       if (!user) {
-        user = await storage.createUser({ mobileNumber: validated });
+        user = await storage.createUser({ 
+          countryCode: "+1", // Default for legacy
+          mobileNumber: validated 
+        });
       }
       
       // Set session
