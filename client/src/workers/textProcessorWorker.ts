@@ -1,19 +1,4 @@
-import { SPECTRUM_MAP } from '@shared/constants';
-
-const VISIBLE_MIN_NM = 380;
-const VISIBLE_MAX_NM = 740;
-
-const LETTERS = Object.keys(SPECTRUM_MAP).sort(); // A..Z
-
-// Precompute wavelength per letter
-const LETTER_WAVELENGTH: Record<string, number> = (() => {
-  const map: Record<string, number> = {};
-  const step = (VISIBLE_MAX_NM - VISIBLE_MIN_NM) / (LETTERS.length - 1);
-  LETTERS.forEach((ch, idx) => {
-    map[ch] = VISIBLE_MIN_NM + step * idx;
-  });
-  return map;
-})();
+import { SPECTRUM_MAP, LETTER_WAVELENGTH } from '@shared/constants';
 
 export interface EncodedSymbol {
   char: string;

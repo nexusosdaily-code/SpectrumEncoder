@@ -17,6 +17,7 @@ export const colorSignalElementSchema = z.object({
   letter: z.string().optional(),
   duration: z.number(),
   type: z.enum(['preamble-white', 'preamble-black', 'sof', 'eof', 'letter', 'guard']),
+  wavelengthNm: z.number().optional(),
 });
 
 export type ColorSignalElement = z.infer<typeof colorSignalElementSchema>;

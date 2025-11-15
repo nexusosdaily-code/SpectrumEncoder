@@ -1,4 +1,4 @@
-import { SPECTRUM_MAP, SOF, EOF, PREAMBLE_WHITE_MS, PREAMBLE_BLACK_MS } from "@shared/constants";
+import { SPECTRUM_MAP, SOF, EOF, PREAMBLE_WHITE_MS, PREAMBLE_BLACK_MS, LETTER_WAVELENGTH } from "@shared/constants";
 import { ColorSignalElement } from "@shared/schema";
 
 export function encodeMessage(
@@ -50,6 +50,7 @@ export function encodeMessage(
       letter: char,
       duration: tsMs,
       type: "letter",
+      wavelengthNm: LETTER_WAVELENGTH[char],
     });
 
     // Guard interval after each letter (except last)

@@ -13,3 +13,27 @@ export const DEFAULT_TS_MS = 140; // symbol duration
 export const DEFAULT_TG_MS = 30;  // guard black
 export const PREAMBLE_WHITE_MS = 300;
 export const PREAMBLE_BLACK_MS = 300;
+
+// Wavelength mapping for camera detection
+export const VISIBLE_MIN_NM = 380;
+export const VISIBLE_MAX_NM = 740;
+
+const LETTERS = Object.keys(SPECTRUM_MAP).sort(); // A..Z
+const STEP_NM = (VISIBLE_MAX_NM - VISIBLE_MIN_NM) / (LETTERS.length - 1);
+
+export const LETTER_WAVELENGTH: Record<string, number> = (() => {
+  const map: Record<string, number> = {};
+  LETTERS.forEach((ch, idx) => {
+    map[ch] = Math.round(VISIBLE_MIN_NM + STEP_NM * idx);
+  });
+  return map;
+})();
+
+// Reverse mapping for wavelength detection
+export const WAVELENGTH_TO_LETTER: Record<number, string> = (() => {
+  const map: Record<number, string> = {};
+  Object.entries(LETTER_WAVELENGTH).forEach(([letter, wavelength]) => {
+    map[wavelength] = letter;
+  });
+  return map;
+})();
