@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import nexusLogo from "@assets/1761392769565_1763194170649.jpg";
 
 export function Header() {
   const [location, setLocation] = useLocation();
@@ -47,9 +48,12 @@ export function Header() {
   return (
     <div className="flex items-center justify-between flex-1">
       <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center h-9 w-9 rounded-md bg-primary">
-          <Radio className="h-5 w-5 text-primary-foreground" />
-        </div>
+        <img 
+          src={nexusLogo} 
+          alt="NEXUS Logo" 
+          className="h-12 w-12 rounded-md object-cover"
+          data-testid="logo-nexus"
+        />
         <div>
           <h1 className="text-2xl font-bold text-foreground">Visual Signal</h1>
           <p className="text-xs text-muted-foreground -mt-1">Encoder/Decoder</p>
