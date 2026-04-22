@@ -1,211 +1,175 @@
-# NEXUS Visual Signal Encoder/Decoder
+# SpectrumEncoder
 
-> A revolutionary open-source platform for visual communication using wavelength-based color spectrum encoding with social networking capabilities.
+  > **CE→SE: Character Encoding to Spectral Encoding — free AGPL-3.0 infrastructure for the civilization.**
+  > Maps every character to a unique position in the electromagnetic spectrum. Silicon bridge until photonics arrives ~2032.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-18-blue)](https://react.dev/)
+  [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+  [![Part of NexusOS](https://img.shields.io/badge/Part%20of-NexusOS-blueviolet)](https://github.com/nexusosdaily-code/NexusOS)
 
-## Overview
+  ---
 
-NEXUS is a web-based application designed for visual communication, encoding text into animated color sequences and decoding them back using your device's camera. It features a unique mapping of characters to visible spectrum wavelengths, real-time encoding/decoding, and a social platform for sharing visual messages.
+  ## What is SpectrumEncoder?
 
-### Key Features
+  SpectrumEncoder is the encoding layer of NexusOS. It implements WASCII v2.0 — the Wave ASCII standard — which assigns every character (ordinal 0–201) a unique physical address in three dimensions:
 
-- **Visual Encoding**: Convert text to animated color sequences using wavelength mapping
-  - Letters (A-Z): 380-740nm visible spectrum
-  - Numbers (0-9): 750-795nm
-  - Punctuation: 800-895nm
-- **Camera-Based Decoding**: Real-time scanning and decoding of visual signals
-- **Dual-Channel System**: Color and brightness-encoded wavelength verification
-- **Social Platform**: User profiles, follow system, and message sharing
-- **SMS Authentication**: Secure country-based mobile verification with Twilio
-- **In-App Messaging**: Send wavelength-encoded messages to other users
-- **Responsive Design**: Modern UI with dark mode support
+  ```
+  λ   (wavelength nm)   — which colour of light carries this character
+  ℓ   (OAM mode)        — which orbital angular momentum ring it occupies
+  pol (polarisation)    — H (horizontal) or V (vertical)
+  ```
 
-## Tech Stack
+  Two characters on different Ψ channels **cannot interfere**. This is the physical basis for NexusOS addressing — not cryptography, not software namespacing. Physics.
 
-### Frontend
-- React 18 with TypeScript
-- Vite for build tooling
-- Wouter for routing
-- TanStack Query v5 for state management
-- Tailwind CSS with Radix UI and shadcn/ui components
-- Lucide React icons
+  ---
 
-### Backend
-- Express.js with TypeScript
-- PostgreSQL database (with in-memory fallback)
-- Drizzle ORM
-- Express sessions for authentication
-- Twilio Programmable Messaging for SMS verification
+  ## WASCII v2.0 — 202 Characters, 25,600 Channels
 
-## Getting Started
+  The full WASCII table is stored in PostgreSQL and served live via `GET /api/wascii`. Every row is a spectral fingerprint:
 
-### Prerequisites
+  | Ordinal | Character | λ (nm) | OAM ℓ | Pol | GPIO PWM |
+  |---------|-----------|--------|-------|-----|----------|
+  | 065     | A         | 656.3  | 15    | H   | 128      |
+  | 078     | N         | 700.0  | 28    | V   | 204      |
+  | 088     | X         | 737.6  | 38    | H   | 171      |
+  | 084     | T         | 723.1  | 34    | H   | 163      |
+  | 048     | 0         | 607.0  | 0     | H   | 89       |
 
-- Node.js 18+ 
-- PostgreSQL database (optional - falls back to in-memory storage)
-- Twilio account for SMS verification (optional - has dev mode fallback)
+  **Channel space:**
+  ```
+  256 WDM bands  ×  50 OAM modes  ×  2 polarisations  =  25,600 orthogonal channels
+  ```
 
-### Installation
+  ---
 
-1. Clone the repository:
-```bash
-git clone https://github.com/your-username/nexus-visual-signal.git
-cd nexus-visual-signal
-```
+  ## CE→SE Encoding Pipeline
 
-2. Install dependencies:
-```bash
-npm install
-```
+  ```
+  Input string  →  CE (Character Encoding)  →  SE (Spectral Encoding)  →  Physical wave frame
+  ```
 
-3. Set up environment variables:
-```bash
-# Required for production
-DATABASE_URL=your_postgresql_connection_string
-SESSION_SECRET=your_session_secret
+  **Step 1 — CE lookup:** Each character resolves to `(λ, ℓ, pol, amplitude, phase)` from the WASCII database.
 
-# Optional - for SMS verification
-TWILIO_ACCOUNT_SID=your_twilio_account_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_PHONE_NUMBER=your_twilio_phone_number
-```
+  **Step 2 — SE frame construction:** The CE parameters build a physical wave frame:
+  ```
+  I  = amplitude × cos(2πft)              (intensity)
+  Q  = amplitude × sin(2πft + phase)      (quadrature)
+  S1 = I² - Q²                            (Stokes linear)
+  S2 = 2IQ·cos(δ)                         (Stokes cross)
+  S3 = 2IQ·sin(δ)                         (Stokes circular)
+  ```
 
-4. Initialize the database (if using PostgreSQL):
-```bash
-npm run db:push
-```
+  **Step 3 — Parallel transmission:** Because every character maps to an orthogonal channel, all characters of a message can be transmitted **simultaneously**. No serialisation bottleneck.
 
-5. Start the development server:
-```bash
-npm run dev
-```
+  ---
 
-The application will be available at `http://localhost:5000`
+  ## Build Cost Breakdown: Proof on Commodity Hardware
 
-## Project Structure
+  Three tiers prove that wave channel addressing, simultaneous encoding, and database lookup are real — not simulated.
 
-```
-nexus-visual-signal/
-├── client/               # Frontend React application
-│   └── src/
-│       ├── components/   # Reusable UI components
-│       ├── pages/        # Page components
-│       ├── lib/          # Utility functions
-│       └── hooks/        # Custom React hooks
-├── server/               # Backend Express application
-│   ├── routes.ts         # API route definitions
-│   └── storage.ts        # Database abstraction layer
-├── shared/               # Shared types and schemas
-│   └── schema.ts         # Drizzle database schema
-└── README.md
-```
+  ### Tier 1 — Proof of Concept (~$250)
 
-## Features in Detail
+  Goal: Demonstrate wave channel addressing on the bench with visible light LEDs and a Raspberry Pi.
 
-### Visual Signal Encoding
+  | Component | Purpose | Cost |
+  |-----------|---------|------|
+  | Raspberry Pi 4B (4 GB) | GPIO PWM controller + database host | $55 |
+  | 660 nm LED + driver | WDM band A (red) | $8 |
+  | 700 nm LED + driver | WDM band B (deep red) | $10 |
+  | 740 nm LED + driver | WDM band C (near-infrared) | $12 |
+  | Polarisation sheet kit (H+V) | Polarisation state switching | $15 |
+  | 3-ring OAM aperture set | OAM mode ℓ = 0, 1, 2 | $20 |
+  | Photodetector BPW34 | Signal readback / calibration | $5 |
+  | Breadboard + jumpers + PSU | Assembly | $30 |
+  | MicroSD 32 GB | OS + NexusOS node | $15 |
+  | Passives (resistors, caps) | Support components | $15 |
+  | **Total** | | **~$185** |
 
-Text is converted into animated color sequences using a wavelength-based mapping system:
+  **What this proves:** Typing a character into the Calibration Verifier tab queries the PostgreSQL WASCII table, returns the expected λ ± 2 nm, and the corresponding GPIO pin drives the matching LED. Channel addressing is database-backed and hardware-verified.
 
-1. **Preamble**: White/black synchronization pulses
-2. **Start-of-Frame (SOF)**: Cyan marker
-3. **Letter Sequence**: Each character mapped to its wavelength color
-4. **Guard Intervals**: Black separators between characters
-5. **End-of-Frame (EOF)**: Magenta marker
+  ---
 
-Each letter also includes 3 brightness digit pulses for dual-channel verification.
+  ### Tier 2 — Simultaneous Encoder (~$900)
 
-### Decoding System
+  Goal: Demonstrate that 8 characters can be encoded and transmitted on 8 parallel channels in the same clock cycle.
 
-The camera scanner uses:
-- **Color Detection**: Perceptual LAB color space matching with Delta E distance
-- **Brightness Analysis**: Wavelength reconstruction from intensity pulses
-- **Dual Verification**: Both channels must agree for accurate decoding
-- **Calibration Sequence**: Optional adaptive detection for environmental challenges
+  | Additional Component | Purpose | Cost |
+  |---------------------|---------|------|
+  | VCSEL diode array (8-ch) | 8 independent wavelength emitters | $220 |
+  | Waveguide coupler | Channel combination into single fibre | $90 |
+  | DAC board (16-bit, 8-ch) | Precision amplitude/phase control | $80 |
+  | Photodetector array (8-ch) | Per-channel readback | $60 |
+  | Fibre patch cables + mounts | Optical assembly | $40 |
+  | **Additional cost** | | **~$490** |
+  | **Tier 2 total** | | **~$675** |
 
-### Social Features
+  **What this proves:** The Character Trace tab shows the SE frame for each character independently. On Tier 2 hardware, each of those frames fires on a separate VCSEL channel simultaneously. The photodetector array confirms all 8 channels active in the same 1 ms window.
 
-- **User Profiles**: Display name, bio, avatar, online status
-- **Follow System**: Follow users and view follower/following lists
-- **User Discovery**: Search users by name or mobile number
-- **In-App Messaging**: Send wavelength-encoded messages
-- **Real-Time Updates**: Polling-based message notifications
+  ---
 
-## Authentication
+  ### Tier 3 — Full Node (~$2,500)
 
-The app uses mobile number authentication with SMS verification:
+  Goal: Demonstrate database-backed channel lookup at <1 ms latency with spectrometer verification.
 
-1. Select your country code
-2. Enter your mobile number
-3. Receive a 5-digit verification code via SMS
-4. Verify the code to activate your account
-5. Optionally share location for future features
+  | Additional Component | Purpose | Cost |
+  |---------------------|---------|------|
+  | Ocean Insight STS-VIS spectrometer | Ground-truth λ measurement ±0.5 nm | $800 |
+  | Spatial Light Modulator (SLM) | Programmable OAM mode generation | $400 |
+  | Polarisation beam splitter cube | Clean H/V separation | $120 |
+  | Grating coupler pair | WDM channel demux/mux | $180 |
+  | Lock-in amplifier (SR830 or equiv.) | Phase-locked readback at noise floor | $350 |
+  | **Additional cost** | | **~$1,850** |
+  | **Tier 3 total** | | **~$2,525** |
 
-## Contributing
+  **What this proves:** The spectrometer measures the actual emitted λ and compares it to the PostgreSQL WASCII value in real time. If `|λ_measured - λ_database| < 2 nm`, the database is a faithful physical map. This closes the loop: software addressing = hardware physics.
 
-We welcome contributions from the community! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) guide to get started.
+  ---
 
-### Quick Start for Contributors
+  ## Running Locally
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes and test thoroughly
-4. Commit with clear messages: `git commit -m 'Add amazing feature'`
-5. Push to your fork: `git push origin feature/amazing-feature`
-6. Open a Pull Request
+  ```bash
+  # The encoder is part of NexusOS — clone the main repo
+  git clone https://github.com/nexusosdaily-code/NexusOS.git
+  cd NexusOS
+  npm install
+  npm run dev
 
-## Development Commands
+  # WASCII table endpoint (202 rows)
+  curl http://localhost:5000/api/wascii
 
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run db:push      # Push database schema changes
-npm run db:studio    # Open Drizzle Studio (database GUI)
-```
+  # CE→SE encode a character (e.g. "A")
+  curl -X POST http://localhost:5000/api/encode \
+    -H "Content-Type: application/json" \
+    -d '{"text": "A"}'
+  ```
 
-## Database Schema
+  The Python spectral API (port 5001) starts automatically with the Node.js server.
 
-The application uses PostgreSQL with the following main tables:
+  ---
 
-- `users` - User accounts with profile information
-- `user_messages` - In-app wavelength-encoded messages
-- `userFollowers` - Follow relationships
-- `networkNodes` - Distributed security nodes (planned feature)
+  ## Pi Bridge Script
 
-## Security
+  The Hardware Lab page (`/hardware-lab → Pi Script Generator`) generates a ready-to-run `hardware_lab_pi.py` tailored to your LED configuration. Download it, copy it to your Pi, and run:
 
-- Session-based authentication
-- SMS verification via Twilio
-- Server-side validation on all mutations
-- Protected API endpoints requiring authentication
-- No client-side secret exposure
+  ```bash
+  python3 hardware_lab_pi.py
+  ```
 
-## Roadmap
+  It reads from the WASCII table, converts ordinals to GPIO PWM values, and drives your LED array in real time as you type in the NexusOS UI.
 
-- [ ] Distributed peer-to-peer network security
-- [ ] WebRTC real-time visual communication
-- [ ] Mobile apps (iOS/Android)
-- [ ] Enhanced calibration for outdoor use
-- [ ] Group messaging and channels
-- [ ] End-to-end encryption
+  ---
 
-## License
+  ## Genesis Channel
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+  ```
+  Ψ(228, 45, H)  ·  λ ≈ 737.6 nm  ·  Near-infrared  ·  GUEST band
+  ```
 
-## Acknowledgments
+  The Genesis block of NexusOS was encoded at this channel. Every address in the system traces back to a physical position in the electromagnetic spectrum.
 
-- Built on Replit with modern web technologies
-- Color science inspired by wavelength-to-RGB mapping
-- Community-driven open source project
+  ---
 
-## Support
+  ## License
 
-- Issues: [GitHub Issues](https://github.com/your-username/nexus-visual-signal/issues)
-- Discussions: [GitHub Discussions](https://github.com/your-username/nexus-visual-signal/discussions)
-
----
-
-Made with ❤️ by the NEXUS community
+  AGPL-3.0 — CE→SE encoding is free infrastructure for the civilization.  
+  Fork it. Build it. Run a node. The protocol belongs to physics.
+  
